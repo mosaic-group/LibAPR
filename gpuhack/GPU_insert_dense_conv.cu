@@ -186,6 +186,8 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
+    const int stencil_half = 2;
+    const int stencil_size = 2*stencil_half+1; 
     std::vector<std::double> stencil;		// the stencil on the host 
     float stencil_value = 1.0f/(1.0f*pow(stencil_half*2 + 1,stencil_size));
     stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
@@ -280,7 +282,7 @@ int main(int argc, char **argv) {
 
     thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start = h_level_zx_index_start;
 
-    thrust::device_vector<std::double> d_stencil(stencil.begin(), d_stencil.end());		// device stencil
+    thrust::device_vector<std::double> d_stencil(stencil.begin(), stencil.end());		// device stencil
     thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end());
     thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end());
     thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),std::numeric_limits<std::uint16_t>::max());
@@ -288,9 +290,7 @@ int main(int argc, char **argv) {
     thrust::device_vector<std::size_t> d_level_offset(level_offset.begin(),level_offset.end());
 
     std::size_t max_elements = 0;
-    const int stencil_half = 2;
-    const int stencil_size = 2*stencil_half+1;
-  
+ 
     for (int level = aprIt.level_min(); level <= aprIt.level_max(); ++level) {
         auto xtimesy = aprIt.spatial_index_y_max(level) + (stencil_size - 1);
         xtimesy *= aprIt.spatial_index_x_max(level) + (stencil_size - 1);
