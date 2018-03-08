@@ -114,7 +114,7 @@ __global__ void push_back(
     std::uint16_t*                 _pdata,
     std::size_t                    _stencil_size,
     std::size_t                    _stencil_half,
-    std::vector<double>*           _stencil
+    const float*           _stencil
     ){
 
     unsigned int x_index = blockDim.x * blockIdx.x + threadIdx.x;
@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
     const int stencil_half = 2;
     const int stencil_size = 2*stencil_half+1; 
-    std::vector<std::double> stencil;		// the stencil on the host 
+    std::vector<float> stencil;		// the stencil on the host
     float stencil_value = 1.0f/(1.0f*pow(stencil_half*2 + 1,stencil_size));
     stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
 
@@ -282,7 +282,7 @@ int main(int argc, char **argv) {
 
     thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start = h_level_zx_index_start;
 
-    thrust::device_vector<std::double> d_stencil(stencil.begin(), stencil.end());		// device stencil
+    thrust::device_vector<float> d_stencil(stencil.begin(), stencil.end());		// device stencil
     thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end());
     thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end());
     thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),std::numeric_limits<std::uint16_t>::max());
@@ -305,7 +305,7 @@ int main(int argc, char **argv) {
     const std::size_t*             offsets= thrust::raw_pointer_cast(d_level_offset.data());
     std::uint16_t*                   tvec = thrust::raw_pointer_cast(d_temp_vec.data());
     std::uint16_t*                   expected = thrust::raw_pointer_cast(d_test_access_data.data());
-    std::double*		     stencil_pointer =  thrust::raw_pointer_cast(d_stencil.data());		// stencil pointer
+    const float*		     stencil_pointer =  thrust::raw_pointer_cast(d_stencil.data());		// stencil pointer
 
      if(cudaGetLastError()!=cudaSuccess){
         std::cerr << "memory transfers failed!\n";
