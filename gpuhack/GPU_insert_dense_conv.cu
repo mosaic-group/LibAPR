@@ -387,3 +387,53 @@ int main(int argc, char **argv) {
 
 
 }
+
+
+
+void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<float>& part_tree,std::vector<double>& stencil, const int stencil_size, const int stencil_half){
+
+    for (uint64_t level_local = apr_iterator.level_max(); level_local >= apr_iterator.level_min(); --level_local) {
+
+
+        MeshData<float> by_level_recon;
+        by_level_recon.init(apr_iterator.spatial_index_y_max(level_local),apr_iterator.spatial_index_x_max(level_local),apr_iterator.spatial_index_z_max(level_local),0);
+
+        uint64_t level = level_local;
+
+            const float step_size = pow(2, level_local - level);
+
+            uint64_t particle_number;
+
+            for (particle_number = apr_iterator.particles_level_begin(level);
+                 particle_number < apr_iterator.particles_level_end(level); ++particle_number) {
+                //
+                //  Parallel loop over level
+                //
+                apr_iterator.set_iterator_to_particle_by_number(particle_number);
+
+                int dim1 = apr_iterator.y() * step_size;
+                int dim2 = apr_iterator.x() * step_size;
+                int dim3 = apr_iterator.z() * step_size;
+
+                float temp_int;
+                //add to all the required rays
+
+                temp_int = particles[apr_iterator];
+
+                const int offset_max_dim1 = std::min((int) by_level_recon.y_num, (int) (dim1 + step_size));
+                const int offset_max_dim2 = std::min((int) by_level_recon.x_num, (int) (dim2 + step_size));
+                const int offset_max_dim3 = std::min((int) by_level_recon.z_num, (int) (dim3 + step_size));
+
+                for (int64_t q = dim3; q < offset_max_dim3; ++q) {
+
+                    for (int64_t k = dim2; k < offset_max_dim2; ++k) {
+                        for (int64_t i = dim1; i < offset_max_dim1; ++i) {
+                            by_level_recon.mesh[i + (k) * by_level_recon.y_num + q * by_level_recon.y_num * by_level_recon.x_num] = temp_int;
+                        }
+                    }
+                }
+            }
+
+
+
+
