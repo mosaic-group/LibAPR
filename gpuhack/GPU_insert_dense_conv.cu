@@ -109,10 +109,12 @@ __global__ void push_back(
     const std::size_t*             _offsets,
     std::size_t                    _max_y,
     std::size_t                    _max_x,
+    std::size_t 		   _max_z,
     std::size_t                    _nparticles,
     std::uint16_t*                 _pdata,
     std::size_t                    _stencil_size,
-    std::size_t                    _stencil_half
+    std::size_t                    _stencil_half,
+    std::vector<double>*           _stencil
     ){
 
     unsigned int x_index = blockDim.x * blockIdx.x + threadIdx.x;
@@ -133,21 +135,30 @@ __global__ void push_back(
     auto t_index = x_index*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
     auto temp_index = 0;
 
+    // Convolution begin 
     for (std::size_t global_index = particle_index_begin;
          global_index <= particle_index_end; ++global_index) {
 
 	int counter = 0;
+	double neighbour_sum = 0;
         auto y = _y_ex[global_index];
 	for(int l = -_stencil_half; l < _stencil_half+1; ++l){   // x stencil
 		for(int q = -_stencil_half; q < _stencil_half+1; ++q){	 // z stencil
  			for(int w = -_stencil_half; w < _stencil_half+1; ++w){	// y stencil
-			   temp_index = (t_index + l)*_max_y + (((_z_index+q) % _stencil_size)*_max_y*_max_x) ;
-	                   _pdata[global_index] += _temp_vec[temp_index+y+w];	   
-			    counter++;
+	
+			    if((x_index + l) >= 0 && (x_index + l) < _max_x){
+				    if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
+					    if((y + w) >= 0 && (y + w) < _max_y){
+						temp_index = (x_index + l)*_max_y + (((_z_index+q) % _stencil_size)*_max_y*_max_x) ;
+						neighbour_sum += _temp_vec[temp_index+y+w]*_stencil[counter];	   
+						counter++;
+					     }
+				    }
+			    }
 			}
 		}
 	}
-//			   _pdata[global_index]/ = counter;	
+			   _pdata[global_index] = neighbour_sum;	
     }
 }
 
@@ -175,6 +186,9 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
+    std::vector<std::double> stencil;		// the stencil on the host 
+    float stencil_value = 1.0f/(1.0f*pow(stencil_half*2 + 1,stencil_size));
+    stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
 
     std::size_t x = 0;
     std::size_t z = 0;
@@ -266,6 +280,7 @@ int main(int argc, char **argv) {
 
     thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start = h_level_zx_index_start;
 
+    thrust::device_vector<std::double> d_stencil(stencil.begin(), d_stencil.end());		// device stencil
     thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end());
     thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end());
     thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),std::numeric_limits<std::uint16_t>::max());
@@ -290,10 +305,10 @@ int main(int argc, char **argv) {
     const std::size_t*             offsets= thrust::raw_pointer_cast(d_level_offset.data());
     std::uint16_t*                   tvec = thrust::raw_pointer_cast(d_temp_vec.data());
     std::uint16_t*                   expected = thrust::raw_pointer_cast(d_test_access_data.data());
+    std::double*		     stencil_pointer =  thrust::raw_pointer_cast(d_stencil.data());		// stencil pointer
 
-    if(cudaGetLastError()!=cudaSuccess){
+     if(cudaGetLastError()!=cudaSuccess){
         std::cerr << "memory transfers failed!\n";
-
     }
     auto end_gpu_tx = std::chrono::high_resolution_clock::now();
 
@@ -334,11 +349,10 @@ int main(int argc, char **argv) {
                                               y_ex,
                                               tvec,
                                               offsets,
-                                              y_num,x_num,
+                                              y_num,x_num,z_num,
                                               particle_values.size(),
                                               expected,
-                                              stencil_size, stencil_half);
-
+                                              stencil_size, stencil_half, stencil_pointer);
             }
         }
         cudaDeviceSynchronize();
@@ -435,5 +449,44 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
             }
 
 
+        int x = 0;
+        int z = 0;
 
+
+        for (z = 0; z < apr.spatial_index_z_max(level); ++z) {
+            //lastly loop over particle locations and compute filter.
+            for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
+                for (apr_iterator.set_new_lzx(level, z, x);
+                     apr_iterator.global_index() < apr_iterator.particles_zx_end(level, z,
+                                                                                 x); apr_iterator.set_iterator_to_particle_next_particle()) {
+                    double neigh_sum = 0;
+                    float counter = 0;
+
+                    const int k = apr_iterator.y(); // offset to allow for boundary padding
+                    const int i = x;
+
+                    for (int l = -stencil_half; l < stencil_half+1; ++l) {
+                        for (int q = -stencil_half; q < stencil_half+1; ++q) {
+                            for (int w = -stencil_half; w < stencil_half+1; ++w) {
+
+                                if((k+w)>=0 & (k+w) < (apr.spatial_index_y_max(level))){
+                                    if((i+q)>=0 & (i+q) < (apr.spatial_index_x_max(level))){
+                                        if((z+l)>=0 & (z+l) < (apr.spatial_index_z_max(level))){
+                                            neigh_sum += stencil[counter] * by_level_recon.at(k + w, i + q, z+l);
+                                        }
+                                    }
+                                }
+               		            counter++;
+                            }
+                        }
+                    }
+
+                    test_particles[apr_iterator] = neigh_sum;
+
+                }
+            }
+        }
+    }
+
+}
 
