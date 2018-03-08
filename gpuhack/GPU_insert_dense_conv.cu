@@ -57,6 +57,10 @@ cmdLineOptions read_command_line_options(int argc, char **argv) {
     return result;
 }
 
+
+void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,std::vector<float>& stencil, const int stencil_size, const int stencil_half);
+
+
 __global__ void insert(
     std::size_t _level,
     std::size_t _z_index,
@@ -139,25 +143,26 @@ __global__ void push_back(
     for (std::size_t global_index = particle_index_begin;
          global_index <= particle_index_end; ++global_index) {
 
-	int counter = 0;
-	double neighbour_sum = 0;
+	    int counter = 0;
+	    double neighbour_sum = 0;
         auto y = _y_ex[global_index];
-	for(int l = -_stencil_half; l < _stencil_half+1; ++l){   // x stencil
-		for(int q = -_stencil_half; q < _stencil_half+1; ++q){	 // z stencil
- 			for(int w = -_stencil_half; w < _stencil_half+1; ++w){	// y stencil
-	
-			    if((x_index + l) >= 0 && (x_index + l) < _max_x){
-				    if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
-					    if((y + w) >= 0 && (y + w) < _max_y){
-						temp_index = (x_index + l)*_max_y + (((_z_index+q) % _stencil_size)*_max_y*_max_x) ;
-						neighbour_sum += _temp_vec[temp_index+y+w]*_stencil[counter];	   
-						counter++;
-					     }
-				    }
-			    }
-			}
-		}
-	}
+
+        for(int q = -_stencil_half; q < _stencil_half+1; ++q){	 // z stencil
+            for(int l = -_stencil_half; l < _stencil_half+1; ++l){   // x stencil
+                for(int w = -_stencil_half; w < _stencil_half+1; ++w){	// y stencil
+
+                    if((x_index + l) >= 0 && (x_index + l) < _max_x){
+                        if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
+                            if((y + w) >= 0 && (y + w) < _max_y){
+                            temp_index = (x_index + l)*_max_y + (((_z_index+q) % _stencil_size)*_max_y*_max_x) ;
+                            neighbour_sum += _temp_vec[temp_index+y+w]*_stencil[counter];
+                            counter++;
+                             }
+                        }
+                    }
+                }
+            }
+        }
 			   _pdata[global_index] = neighbour_sum;	
     }
 }
@@ -383,12 +388,17 @@ int main(int argc, char **argv) {
     ///
     ////////////////////////////
 
+    ExtraParticleData<float> utest_data(apr);
+
+
+    create_test_particles_surya(apr,aprIt, utest_data,apr.particles_intensities,stencil, stencil_size, stencil_half);
+
     bool success = true;
 
     for (std::size_t i = 0; i < test_access_data.size(); ++i) {
-        if(apr.particles_intensities.data[i]!=test_access_data[i]){
+        if(utest_data.data[i]!=test_access_data[i]){
             success = false;
-            std::cout << i << " expected: " << apr.particles_intensities.data[i] << ", received: " << test_access_data[i] << "\n";
+            std::cout << i << " expected: " << utest_data.data[i] << ", received: " << test_access_data[i] << "\n";
             break;
         }
     }
@@ -404,7 +414,7 @@ int main(int argc, char **argv) {
 
 
 
-void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<float>& part_tree,std::vector<double>& stencil, const int stencil_size, const int stencil_half){
+void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,std::vector<float>& stencil, const int stencil_size, const int stencil_half){
 
     for (uint64_t level_local = apr_iterator.level_max(); level_local >= apr_iterator.level_min(); --level_local) {
 
