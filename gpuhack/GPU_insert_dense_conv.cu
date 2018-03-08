@@ -92,7 +92,7 @@ __global__ void insert(
     auto particle_index_begin = thrust::get<0>(row_start);
     auto particle_index_end   = thrust::get<1>(row_start);
 
-    _z_index = 0;
+    //_z_index = 0;
     auto t_index = x_index*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
 
     for(auto y = 0;y < _max_y;y++){
@@ -146,7 +146,7 @@ __global__ void push_back(
     auto particle_index_begin = thrust::get<0>(row_start);
     auto particle_index_end   = thrust::get<1>(row_start);
 
-    _z_index=0;
+    //_z_index=0;
     auto t_index = x_index*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
     auto temp_index = 0;
 
@@ -170,10 +170,12 @@ __global__ void push_back(
                         if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
                             if((y + w) >= 0 && (y + w) < _max_y){
                                 temp_index = (x_index + l)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y+w ;
-                                //neighbour_sum += _temp_vec[temp_index+y+w]*_stencil[counter];
+                                neighbour_sum += _temp_vec[temp_index];
                                 //
-                                temp_index = (x_index+l)*_max_y + (((0) % _stencil_size)*_max_y*_max_x) +y;
-                                _pdata[global_index] = _temp_vec[temp_index];
+                                //if(q==1) {
+                                //    temp_index = (x_index)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y ;
+                                  //  _pdata[global_index] = _temp_vec[temp_index];
+                                //}
                                 counter++;
 
                              }
@@ -185,7 +187,7 @@ __global__ void push_back(
             }
         }
 
-       // _pdata[global_index] = neighbour_sum;
+        _pdata[global_index] = std::round(neighbour_sum/27.0);
 
 
        // temp_index = (x_index)*_max_y + (((_z_index) % _stencil_size)*_max_y*_max_x) ;
@@ -321,7 +323,7 @@ int main(int argc, char **argv) {
     thrust::device_vector<std::float_t> d_stencil(stencil.begin(), stencil.end());		// device stencil
     thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end());
     thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end());
-    thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),std::numeric_limits<std::uint16_t>::max());
+    thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),0);
 
     thrust::device_vector<std::size_t> d_level_offset(level_offset.begin(),level_offset.end());
 
@@ -361,10 +363,21 @@ int main(int argc, char **argv) {
             dim3 threads(32);
             dim3 blocks((x_num + threads.x- 1)/threads.x);
 
-            for(int z = 0;z<z_num;++z){
+            insert<<<blocks,threads>>>(lvl,
+                    0,
+                    levels,
+                    y_ex,
+                    pdata,
+                    offsets,
+                    y_num,x_num,
+                    particle_values.size(),
+                    tvec,
+                    stencil_size, stencil_half);
+
+            for(int z = 0;z<(z_num-1);++z){
 
                 insert<<<blocks,threads>>>(lvl,
-                                           z,
+                                           z+1,
                                            levels,
                                            y_ex,
                                            pdata,
@@ -507,7 +520,7 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
         int z = 0;
 
 
-        for (z = 0; z < apr.spatial_index_z_max(level); ++z) {
+        for (z = 0; z < (apr.spatial_index_z_max(level)-1); ++z) {
             //lastly loop over particle locations and compute filter.
             for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
                 for (apr_iterator.set_new_lzx(level, z, x);
@@ -530,7 +543,9 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
                                         if((z+l)>=0 & (z+l) < (apr.spatial_index_z_max(level))){
                                             //neigh_sum += stencil[counter] * by_level_recon.at(k + w, i + q, z+l);
                                             neigh_sum += by_level_recon.at(k + w, i + q, z+l);
-                                            test_particles[apr_iterator] = by_level_recon.at(k, i+q , z);
+                                            //if(l==1) {
+                                              //  test_particles[apr_iterator] = by_level_recon.at(k, i , z+l);
+                                            //}
                                         }
                                     }
                                 }
@@ -539,7 +554,7 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
                         }
                     }
 
-                    //test_particles[apr_iterator] = neigh_sum;
+                    test_particles[apr_iterator] = std::round(neigh_sum/27.0);
 
 
                 }
