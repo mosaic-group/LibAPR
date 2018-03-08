@@ -7,6 +7,11 @@ project(LibAPR DESCRIPTION "Adaptive Particle Representation library")
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# force blosc to use local snappy and zstd
+set(PREFER_EXTERNAL_ZSTD OFF CACHE BOOL "Prefer included Zstd")
+set(PREFER_EXTERNAL_LZ4 OFF CACHE BOOL "Prefer included LZ4")
+set(PREFER_EXTERNAL_SNAPPY OFF CACHE BOOL "Prefer included Snappy")
+
 # APR build options:
 option(APR_INSTALL "Install APR library" ON)
 option(APR_BUILD_SHARED_LIB "Builds shared library" ON)
@@ -83,15 +88,15 @@ endif()
 # If you ever want to compile with Intel's icc (or any other compiler) provide
 # compiler names/paths in cmake command like this:
 # CC="icc" CXX="icc" CXXFLAGS="-O3" cmake -DAPR_TESTS=1
-set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -pedantic ")
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -Wall -pedantic")
 if(CMAKE_COMPILER_IS_GNUCC)
-    set(CMAKE_CXX_FLAGS_RELEASE "-O4 -ffast-math -lrt")
-    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -lrt")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O4 -ffast-math -lrt -fPIC")
+    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g -lrt -fPIC")
     set(CMAKE_EXE_LINKER_FLAGS  "${CMAKE_EXE_LINKER_FLAGS} -Bdynamic -ldl ")
 endif(CMAKE_COMPILER_IS_GNUCC)
 if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math")
-    set(CMAKE_CXX_FLAGS_DEBUG  "-O0 -g")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -ffast-math -fPIC")
+    set(CMAKE_CXX_FLAGS_DEBUG  "-O0 -g -fPIC")
 endif()
 
 
@@ -109,6 +114,7 @@ add_library(aprObjLib OBJECT ${SOURCE_FILES} ${SOURCE_FILES_RAYCAST})
 set(CUDA_TARGET "")
 set(CUDA_APR_TARGET "")
 if(APR_USE_CUDA)
+  enable_language(CUDA)
     message(STATUS "APR: Building CUDA for APR")
     set(CUDA_PROPAGATE_HOST_FLAGS OFF)
     find_package(CUDA REQUIRED)
@@ -117,11 +123,19 @@ if(APR_USE_CUDA)
     set_property(TARGET cudaLib PROPERTY IMPORTED_LOCATION ${CUDA_cudart_static_LIBRARY})
     set(CUDA_TARGET cudaLib)
     set(CUDA_APR_TARGET cudaAprLib)
-    list(APPEND CUDA_NVCC_FLAGS "-std=c++14;-O0; -Xcompiler -fPIC") 
+    CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS Auto)
+    #list(APPEND CUDA_NVCC_FLAGS "-O0; -Xcompiler -fPIC")#"-std=c++14;-O0; -Xcompiler -fPIC")
+    list(APPEND CUDA_NVCC_FLAGS ${ARCH_FLAGS})
+
     cuda_add_library(${CUDA_APR_TARGET} STATIC src/algorithm/number.cu)
     target_link_libraries(${CUDA_APR_TARGET} ${CUDA_LIBRARIES})
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DAPR_USE_CUDA")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAPR_USE_CUDA")
+    set_target_properties(${CUDA_APR_TARGET} PROPERTIES
+      CUDA_STANDARD 14
+      POSITION_INDEPENDENT_CODE True
+      COMPILE_FLAGS "-DAPR_USE_CUDA"
+      )
+    # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DAPR_USE_CUDA")
+#     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAPR_USE_CUDA")
 endif()
 
 if(APR_BUILD_STATIC_LIB)
