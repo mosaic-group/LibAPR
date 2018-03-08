@@ -10,10 +10,13 @@
 #include "data_structures/APR/APR.hpp"
 #include "data_structures/APR/APRTreeIterator.hpp"
 #include "data_structures/APR/ExtraParticleData.hpp"
+#include "data_structures/Mesh/MeshData.hpp"
+#include "io/TiffUtils.hpp"
 
 #include "thrust/device_vector.h"
 #include "thrust/tuple.h"
 #include "thrust/copy.h"
+#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cmath"
 
 struct cmdLineOptions{
     std::string output = "output";
@@ -85,13 +88,20 @@ __global__ void insert(
     auto level_zx_offset = _offsets[_level] + _max_x * _z_index + x_index;
     auto row_start = _line_offsets[level_zx_offset];
 
-    if(thrust::get<1>(row_start) == 0)
-        return;
 
     auto particle_index_begin = thrust::get<0>(row_start);
     auto particle_index_end   = thrust::get<1>(row_start);
 
+    _z_index = 0;
     auto t_index = x_index*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
+
+    for(auto y = 0;y < _max_y;y++){
+        _temp_vec[t_index+y]  = 0;
+    }
+
+    if(thrust::get<1>(row_start) == 0)
+        return;
+
 
     for (std::size_t global_index = particle_index_begin;
          global_index <= particle_index_end; ++global_index) {
@@ -118,7 +128,7 @@ __global__ void push_back(
     std::uint16_t*                 _pdata,
     std::size_t                    _stencil_size,
     std::size_t                    _stencil_half,
-    const float*           _stencil
+    const std::float_t*           _stencil
     ){
 
     unsigned int x_index = blockDim.x * blockIdx.x + threadIdx.x;
@@ -136,6 +146,7 @@ __global__ void push_back(
     auto particle_index_begin = thrust::get<0>(row_start);
     auto particle_index_end   = thrust::get<1>(row_start);
 
+    _z_index=0;
     auto t_index = x_index*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
     auto temp_index = 0;
 
@@ -147,23 +158,39 @@ __global__ void push_back(
 	    double neighbour_sum = 0;
         auto y = _y_ex[global_index];
 
-        for(int q = -_stencil_half; q < _stencil_half+1; ++q){	 // z stencil
-            for(int l = -_stencil_half; l < _stencil_half+1; ++l){   // x stencil
-                for(int w = -_stencil_half; w < _stencil_half+1; ++w){	// y stencil
+        //_pdata[global_index]=1;
+        _pdata[global_index]=0;
+
+
+        for(int q = -1; q <2; ++q){	 // z stencil
+            for(int l = -1; l < 2; ++l){   // x stencil
+                for(int w = -1; w < 2; ++w){	// y stencil
 
                     if((x_index + l) >= 0 && (x_index + l) < _max_x){
                         if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
                             if((y + w) >= 0 && (y + w) < _max_y){
-                            temp_index = (x_index + l)*_max_y + (((_z_index+q) % _stencil_size)*_max_y*_max_x) ;
-                            neighbour_sum += _temp_vec[temp_index+y+w]*_stencil[counter];
-                            counter++;
+                                temp_index = (x_index + l)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y+w ;
+                                //neighbour_sum += _temp_vec[temp_index+y+w]*_stencil[counter];
+                                //
+                                temp_index = (x_index+l)*_max_y + (((0) % _stencil_size)*_max_y*_max_x) +y;
+                                _pdata[global_index] = _temp_vec[temp_index];
+                                counter++;
+
                              }
                         }
                     }
+
+
                 }
             }
         }
-			   _pdata[global_index] = neighbour_sum;	
+
+       // _pdata[global_index] = neighbour_sum;
+
+
+       // temp_index = (x_index)*_max_y + (((_z_index) % _stencil_size)*_max_y*_max_x) ;
+       // _pdata[global_index] = _temp_vec[temp_index+y];
+
     }
 }
 
@@ -191,11 +218,14 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
-    const int stencil_half = 2;
+    const int stencil_half = 1;
     const int stencil_size = 2*stencil_half+1; 
-    std::vector<float> stencil;		// the stencil on the host
-    float stencil_value = 1.0f/(1.0f*pow(stencil_half*2 + 1,stencil_size));
+    std::vector<std::float_t> stencil;		// the stencil on the host
+    std::float_t stencil_value = 1.0;
     stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
+
+    std::cout << stencil[0] << std::endl;
+
 
     std::size_t x = 0;
     std::size_t z = 0;
@@ -287,7 +317,8 @@ int main(int argc, char **argv) {
 
     thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start = h_level_zx_index_start;
 
-    thrust::device_vector<float> d_stencil(stencil.begin(), stencil.end());		// device stencil
+
+    thrust::device_vector<std::float_t> d_stencil(stencil.begin(), stencil.end());		// device stencil
     thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end());
     thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end());
     thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),std::numeric_limits<std::uint16_t>::max());
@@ -297,8 +328,8 @@ int main(int argc, char **argv) {
     std::size_t max_elements = 0;
  
     for (int level = aprIt.level_min(); level <= aprIt.level_max(); ++level) {
-        auto xtimesy = aprIt.spatial_index_y_max(level) + (stencil_size - 1);
-        xtimesy *= aprIt.spatial_index_x_max(level) + (stencil_size - 1);
+        auto xtimesy = aprIt.spatial_index_y_max(level);// + (stencil_size - 1);
+        xtimesy *= aprIt.spatial_index_x_max(level);// + (stencil_size - 1);
         if(max_elements < xtimesy)
             max_elements = xtimesy;
     }
@@ -310,7 +341,7 @@ int main(int argc, char **argv) {
     const std::size_t*             offsets= thrust::raw_pointer_cast(d_level_offset.data());
     std::uint16_t*                   tvec = thrust::raw_pointer_cast(d_temp_vec.data());
     std::uint16_t*                   expected = thrust::raw_pointer_cast(d_test_access_data.data());
-    const float*		     stencil_pointer =  thrust::raw_pointer_cast(d_stencil.data());		// stencil pointer
+    const std::float_t*		     stencil_pointer =  thrust::raw_pointer_cast(d_stencil.data());		// stencil pointer
 
      if(cudaGetLastError()!=cudaSuccess){
         std::cerr << "memory transfers failed!\n";
@@ -327,8 +358,8 @@ int main(int argc, char **argv) {
             const int x_num = aprIt.spatial_index_x_max(lvl);
             const int z_num = aprIt.spatial_index_z_max(lvl);
 
-            dim3 threads(32,1);
-            dim3 blocks((x_num + threads.x- 1)/threads.x,1);
+            dim3 threads(32);
+            dim3 blocks((x_num + threads.x- 1)/threads.x);
 
             for(int z = 0;z<z_num;++z){
 
@@ -347,6 +378,7 @@ int main(int argc, char **argv) {
                     std::cerr << "on " << lvl << " the cuda kernel does not run!\n";
                     break;
                 }
+                cudaDeviceSynchronize();
 
                 push_back<<<blocks,threads>>>(lvl,
                                               z,
@@ -358,6 +390,8 @@ int main(int argc, char **argv) {
                                               particle_values.size(),
                                               expected,
                                               stencil_size, stencil_half, stencil_pointer);
+
+                cudaDeviceSynchronize();
             }
         }
         cudaDeviceSynchronize();
@@ -380,7 +414,7 @@ int main(int argc, char **argv) {
     std::cout << "   GPU: up   " << gpu_tx_up  .count() << " ms\n";
     std::cout << "   GPU: down " << gpu_tx_down.count() << " ms\n";
 
-    assert(test_access_data.back() != std::numeric_limits<std::uint16_t>::max());
+   // assert(test_access_data.back() != std::numeric_limits<std::uint16_t>::max());
 
     //////////////////////////
     ///
@@ -389,24 +423,34 @@ int main(int argc, char **argv) {
     ////////////////////////////
 
     ExtraParticleData<float> utest_data(apr);
+    apr.parameters.input_dir = options.directory;
 
 
     create_test_particles_surya(apr,aprIt, utest_data,apr.particles_intensities,stencil, stencil_size, stencil_half);
 
     bool success = true;
 
-    for (std::size_t i = 0; i < test_access_data.size(); ++i) {
-        if(utest_data.data[i]!=test_access_data[i]){
+    uint64_t c_fail= 0;
+
+
+
+    for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+        //This step is required for all loops to set the iterator by the particle number
+        aprIt.set_iterator_to_particle_by_number(particle_number);
+        if(utest_data.data[particle_number]!=test_access_data[particle_number]){
             success = false;
-            std::cout << i << " expected: " << utest_data.data[i] << ", received: " << test_access_data[i] << "\n";
-            break;
+            std::cout << aprIt.x()<< " "  << aprIt.y()<< " "  << aprIt.z() << " "<< aprIt.level() << " expected: " << utest_data.data[particle_number] << ", received: " << test_access_data[particle_number] << "\n";
+            //break;
+            c_fail++;
         }
+
     }
 
-    if(success){
+
+        if(success){
         std::cout << "PASS" << std::endl;
     } else {
-        std::cout << "FAIL" << std::endl;
+        std::cout << "FAIL " << c_fail << std::endl;
     }
 
 
@@ -424,7 +468,7 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
 
         uint64_t level = level_local;
 
-            const float step_size = pow(2, level_local - level);
+            const int step_size = 1;
 
             uint64_t particle_number;
 
@@ -435,9 +479,9 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
                 //
                 apr_iterator.set_iterator_to_particle_by_number(particle_number);
 
-                int dim1 = apr_iterator.y() * step_size;
-                int dim2 = apr_iterator.x() * step_size;
-                int dim3 = apr_iterator.z() * step_size;
+                int dim1 = apr_iterator.y() ;
+                int dim2 = apr_iterator.x() ;
+                int dim3 = apr_iterator.z() ;
 
                 float temp_int;
                 //add to all the required rays
@@ -475,6 +519,8 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
                     const int k = apr_iterator.y(); // offset to allow for boundary padding
                     const int i = x;
 
+                    //test_particles[apr_iterator]=0;
+
                     for (int l = -stencil_half; l < stencil_half+1; ++l) {
                         for (int q = -stencil_half; q < stencil_half+1; ++q) {
                             for (int w = -stencil_half; w < stencil_half+1; ++w) {
@@ -482,7 +528,9 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
                                 if((k+w)>=0 & (k+w) < (apr.spatial_index_y_max(level))){
                                     if((i+q)>=0 & (i+q) < (apr.spatial_index_x_max(level))){
                                         if((z+l)>=0 & (z+l) < (apr.spatial_index_z_max(level))){
-                                            neigh_sum += stencil[counter] * by_level_recon.at(k + w, i + q, z+l);
+                                            //neigh_sum += stencil[counter] * by_level_recon.at(k + w, i + q, z+l);
+                                            neigh_sum += by_level_recon.at(k + w, i + q, z+l);
+                                            test_particles[apr_iterator] = by_level_recon.at(k, i+q , z);
                                         }
                                     }
                                 }
@@ -491,11 +539,15 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
                         }
                     }
 
-                    test_particles[apr_iterator] = neigh_sum;
+                    //test_particles[apr_iterator] = neigh_sum;
+
 
                 }
             }
         }
+
+         std::string image_file_name = apr.parameters.input_dir + std::to_string(level_local) + "_by_level.tif";
+        TiffUtils::saveMeshAsTiff(image_file_name, by_level_recon);
     }
 
 }
