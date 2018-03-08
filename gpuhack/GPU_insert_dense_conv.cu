@@ -162,15 +162,15 @@ __global__ void push_back(
         _pdata[global_index]=0;
 
 
-        for(int q = -1; q <2; ++q){	 // z stencil
-            for(int l = -1; l < 2; ++l){   // x stencil
-                for(int w = -1; w < 2; ++w){	// y stencil
+        for(int q = -_stencil_half; q < (_stencil_half+1); ++q){	 // z stencil
+            for(int l = -_stencil_half; l < (_stencil_half+1); ++l){   // x stencil
+                for(int w = -_stencil_half; w < (_stencil_half+1); ++w){	// y stencil
 
                     if((x_index + l) >= 0 && (x_index + l) < _max_x){
                         if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
                             if((y + w) >= 0 && (y + w) < _max_y){
                                 temp_index = (x_index + l)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y+w ;
-                                neighbour_sum += _temp_vec[temp_index];
+                                neighbour_sum += _stencil[counter]*_temp_vec[temp_index];
                                 //
                                 //if(q==1) {
                                 //    temp_index = (x_index)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y ;
@@ -220,10 +220,10 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
-    const int stencil_half = 1;
+    const int stencil_half = 2;
     const int stencil_size = 2*stencil_half+1; 
     std::vector<std::float_t> stencil;		// the stencil on the host
-    std::float_t stencil_value = 1.0;
+    std::float_t stencil_value = 0.25;
     stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
 
     std::cout << stencil[0] << std::endl;
@@ -363,21 +363,24 @@ int main(int argc, char **argv) {
             dim3 threads(32);
             dim3 blocks((x_num + threads.x- 1)/threads.x);
 
-            insert<<<blocks,threads>>>(lvl,
-                    0,
-                    levels,
-                    y_ex,
-                    pdata,
-                    offsets,
-                    y_num,x_num,
-                    particle_values.size(),
-                    tvec,
-                    stencil_size, stencil_half);
+            for (int i = 0; i < stencil_half; ++i) {
+                insert<<<blocks,threads>>>(lvl,
+                        0,
+                        levels,
+                        y_ex,
+                        pdata,
+                        offsets,
+                        y_num,x_num,
+                        particle_values.size(),
+                        tvec,
+                        stencil_size, stencil_half);
+            }
 
-            for(int z = 0;z<(z_num-1);++z){
+
+            for(int z = 0;z<(z_num-stencil_half);++z){
 
                 insert<<<blocks,threads>>>(lvl,
-                                           z+1,
+                                           z+stencil_half,
                                            levels,
                                            y_ex,
                                            pdata,
@@ -520,7 +523,7 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
         int z = 0;
 
 
-        for (z = 0; z < (apr.spatial_index_z_max(level)-1); ++z) {
+        for (z = 0; z < (apr.spatial_index_z_max(level)-stencil_half); ++z) {
             //lastly loop over particle locations and compute filter.
             for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
                 for (apr_iterator.set_new_lzx(level, z, x);
@@ -541,8 +544,8 @@ void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_i
                                 if((k+w)>=0 & (k+w) < (apr.spatial_index_y_max(level))){
                                     if((i+q)>=0 & (i+q) < (apr.spatial_index_x_max(level))){
                                         if((z+l)>=0 & (z+l) < (apr.spatial_index_z_max(level))){
-                                            //neigh_sum += stencil[counter] * by_level_recon.at(k + w, i + q, z+l);
-                                            neigh_sum += by_level_recon.at(k + w, i + q, z+l);
+                                            neigh_sum += stencil[counter] * by_level_recon.at(k + w, i + q, z+l);
+                                            //neigh_sum += by_level_recon.at(k + w, i + q, z+l);
                                             //if(l==1) {
                                               //  test_particles[apr_iterator] = by_level_recon.at(k, i , z+l);
                                             //}
