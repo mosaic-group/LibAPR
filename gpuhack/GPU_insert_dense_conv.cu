@@ -162,15 +162,18 @@ __global__ void push_back(
         _pdata[global_index]=0;
 
 
-        for(int q = -_stencil_half; q < (_stencil_half+1); ++q){	 // z stencil
-            for(int l = -_stencil_half; l < (_stencil_half+1); ++l){   // x stencil
-                for(int w = -_stencil_half; w < (_stencil_half+1); ++w){	// y stencil
+        int lower_bound = (_stencil_half);
+
+        for(int q = -(lower_bound); q < (lower_bound+1); ++q){	 // z stencil
+            for(int l = -(lower_bound); l < (lower_bound+1); ++l){   // x stencil
+                for(int w = -(lower_bound); w < (lower_bound+1); ++w){	// y stencil
 
                     if((x_index + l) >= 0 && (x_index + l) < _max_x){
                         if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
                             if((y + w) >= 0 && (y + w) < _max_y){
+
                                 temp_index = (x_index + l)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y+w ;
-                                neighbour_sum += _stencil[counter]*_temp_vec[temp_index];
+                                neighbour_sum += (_stencil[counter]*_temp_vec[temp_index]);
                                 //
                                 //if(q==1) {
                                 //    temp_index = (x_index)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y ;
@@ -220,10 +223,10 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
-    const int stencil_half = 2;
+    const int stencil_half = 1;
     const int stencil_size = 2*stencil_half+1; 
     std::vector<std::float_t> stencil;		// the stencil on the host
-    std::float_t stencil_value = 0.25;
+    std::float_t stencil_value = 1;
     stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
 
     std::cout << stencil[0] << std::endl;
@@ -460,10 +463,12 @@ int main(int argc, char **argv) {
             c_fail++;
         }
 
+       // std::cout << aprIt.x()<< " "  << aprIt.y()<< " "  << aprIt.z() << " "<< aprIt.level() << " expected: " << utest_data.data[particle_number] << ", received: " << test_access_data[particle_number] << "\n";
+
     }
 
 
-        if(success){
+    if(success){
         std::cout << "PASS" << std::endl;
     } else {
         std::cout << "FAIL " << c_fail << std::endl;
