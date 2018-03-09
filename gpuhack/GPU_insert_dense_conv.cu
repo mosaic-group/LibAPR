@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
-    const int stencil_half = 1;
+    const int stencil_half = 2;
     const int stencil_size = 2*stencil_half+1; 
     std::vector<std::float_t> stencil;		// the stencil on the host
     std::float_t stencil_value = 1;
@@ -368,7 +368,7 @@ int main(int argc, char **argv) {
 
             for (int i = 0; i < stencil_half; ++i) {
                 insert<<<blocks,threads>>>(lvl,
-                        0,
+                        i,
                         levels,
                         y_ex,
                         pdata,
