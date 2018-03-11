@@ -98,9 +98,9 @@ __global__ void insert(
     //_z_index = 0;
     auto t_index = x_index*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
 
-    for(auto y = 0;y < _max_y;y++){
-        _temp_vec[t_index+y]  = 0;
-    }
+//    for(auto y = 0;y < _max_y;y++){
+//        _temp_vec[t_index+y]  = 0;
+//    }
 
     if((particle_index_end-particle_index_begin) == 0)
         return;
@@ -114,6 +114,77 @@ __global__ void insert(
         _temp_vec[t_index+y] = current_particle_value;
 
     }
+
+}
+
+__global__ void insert_dynamic(
+        std::size_t _level,
+        std::size_t _z_index,
+        const thrust::tuple<std::size_t,std::size_t>* _line_offsets,
+        const std::uint16_t*           _y_ex,
+        const std::uint16_t*           _pdata,
+        const std::size_t*             _offsets,
+        std::size_t                    _max_y,
+        std::size_t                    _max_x,
+        std::size_t                    _nparticles,
+        std::uint16_t*                 _temp_vec,
+        std::size_t                    _stencil_size,
+        std::size_t                    _stencil_half,std::uint16_t*  _xend,std::size_t*  _ind_end,std::size_t num_blocks
+){
+
+
+    int load_index = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if(load_index>=num_blocks){
+        return;
+    }
+    //_z_index = 0;
+
+
+
+    std::size_t x_begin;
+    std::size_t x_end = _xend[load_index];
+
+    auto level_zx_offset = _offsets[_level] + _max_x * _z_index;
+
+    std::size_t parts_begin;
+    std::size_t parts_end;
+
+    if(load_index==0){
+        x_begin = 0;
+        parts_begin = thrust::get<0>(_line_offsets[level_zx_offset]);
+
+    } else {
+        x_begin = _xend[load_index-1];
+        parts_begin = _ind_end[load_index-1];
+    }
+
+    //
+
+    for (auto x = x_begin; x <= x_end; ++x) {
+
+
+        auto t_index = x*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
+
+        if(x!=x_begin){
+            parts_begin  = thrust::get<0>(_line_offsets[level_zx_offset+x]);
+        }
+
+        if(x!=x_end){
+            parts_end  = thrust::get<1>(_line_offsets[level_zx_offset+x]);
+        } else {
+            parts_end  = _ind_end[load_index];
+        }
+
+
+        for (std::size_t p = parts_begin; p < parts_end ; ++p) {
+            //uint16_t current_particle_value = ;
+            auto y = _y_ex[p];
+            _temp_vec[t_index+y] = _pdata[p];
+        }
+
+    }
+
 
 }
 
@@ -155,7 +226,6 @@ __global__ void load_balance(std::size_t _level,std::size_t _z_index,const thrus
             _xend[i]=x_index;
             _ind_end[i]= floor(i*parts_per_block) + parts_begin;
 
-            //printf("set i: %d to %d \n",i, (int) _ind_end[i]);
         }
     }
 
@@ -164,13 +234,9 @@ __global__ void load_balance(std::size_t _level,std::size_t _z_index,const thrus
     if(x_index==(_max_x-1)){
         _ind_end[num_blocks-1] = parts_end;
         _xend[num_blocks-1] = (_max_x-1);
-        //printf("set i: %d to %d \n",(int)(num_blocks-1), (int)parts_end);
+
     }
 
-//    if(x_index==0){
-//
-//        //printf("set i: %d to %d \n",(int)(num_blocks-1), (int)parts_end);
-//    }
 
 
 }
@@ -180,12 +246,77 @@ __global__ void test_iterate(std::size_t _level,std::size_t _z_index,const thrus
         std::size_t   _max_x,std::uint16_t*  _pdata,std::size_t num_blocks){
 
     int load_index = blockDim.x * blockIdx.x + threadIdx.x;
-    int debug =   threadIdx.x;
 
     if(load_index>=num_blocks){
         return;
     }
 
+    std::size_t x_begin;
+    std::size_t x_end = _xend[load_index];
+
+    auto level_zx_offset = _offsets[_level] + _max_x * _z_index;
+
+    std::size_t parts_begin;
+    std::size_t parts_end;
+
+    if(load_index==0){
+        x_begin = 0;
+        parts_begin = thrust::get<0>(_line_offsets[level_zx_offset]);
+
+    } else {
+        x_begin = _xend[load_index-1];
+        parts_begin = _ind_end[load_index-1];
+    }
+
+    //
+
+    for (auto x = x_begin; x <= x_end; ++x) {
+
+
+        if(x!=x_begin){
+            parts_begin  = thrust::get<0>(_line_offsets[level_zx_offset+x]);
+        }
+
+        if(x!=x_end){
+            parts_end  = thrust::get<1>(_line_offsets[level_zx_offset+x]);
+        } else {
+            parts_end  = _ind_end[load_index];
+        }
+
+
+         for (std::size_t p = parts_begin; p < parts_end ; ++p) {
+           _pdata[p]+=1;
+         }
+
+    }
+
+}
+
+
+__global__ void push_back_dynamic(
+        std::size_t _level,
+        std::size_t _z_index,
+        const thrust::tuple<std::size_t,std::size_t>* _line_offsets,
+        const std::uint16_t*           _y_ex,
+        const std::uint16_t*           _temp_vec,
+        const std::size_t*             _offsets,
+        std::size_t                    _max_y,
+        std::size_t                    _max_x,
+        std::size_t 		   _max_z,
+        std::size_t                    _nparticles,
+        std::uint16_t*                 _pdata,
+        std::size_t                    _stencil_size,
+        std::size_t                    _stencil_half,
+        const std::float_t*           _stencil,std::uint16_t*  _xend,std::size_t*  _ind_end,std::size_t num_blocks
+){
+
+
+    int load_index = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if(load_index>=num_blocks){
+        return;
+    }
+    //_z_index = 0;
 
 
 
@@ -207,18 +338,12 @@ __global__ void test_iterate(std::size_t _level,std::size_t _z_index,const thrus
     }
 
     //
-
-    if(load_index == 1){
-//        printf("Hello from dim: %d block: %d, thread: %d  load index: %d debug %d \n",blockDim.x, blockIdx.x, threadIdx.x,load_index,debug);
-//        for (int i = 0; i < num_blocks; ++i) {
-//            printf("ind: %d x: %d \n",(int)_ind_end[i],(int)_xend[i]);
-//        }
-
-    }
-
+    std::size_t temp_index;
 
     for (auto x = x_begin; x <= x_end; ++x) {
 
+
+        auto t_index = x*_max_y + ((_z_index % _stencil_size)*_max_y*_max_x) ;
 
         if(x!=x_begin){
             parts_begin  = thrust::get<0>(_line_offsets[level_zx_offset+x]);
@@ -230,13 +355,41 @@ __global__ void test_iterate(std::size_t _level,std::size_t _z_index,const thrus
             parts_end  = _ind_end[load_index];
         }
 
-        if(parts_end==68916){
-            printf("hello ib %d ie %d xbegin %d xend %d load %d\n",(int) parts_begin,(int) parts_end,(int) x_begin,(int) x_end,(int) load_index);
-        }
 
-         for (std::size_t p = parts_begin; p < parts_end ; ++p) {
-           _pdata[p]+=1;
-         }
+        for (std::size_t global_index = parts_begin; global_index < parts_end ; ++global_index) {
+
+            int counter = 0;
+            double neighbour_sum = 0;
+            auto y = _y_ex[global_index];
+
+            int lower_bound = (_stencil_half);
+
+            for(int q = -(lower_bound); q < (lower_bound+1); ++q){	 // z stencil
+                for(int l = -(lower_bound); l < (lower_bound+1); ++l){   // x stencil
+                    for(int w = -(lower_bound); w < (lower_bound+1); ++w){	// y stencil
+
+                        if((x + l) >= 0 && (x + l) < _max_x){
+                            if((_z_index + q) >= 0 && (_z_index + q) < _max_z){
+                                if((y + w) >= 0 && (y + w) < _max_y){
+
+                                    temp_index = (x + l)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y+w ;
+                                    neighbour_sum += (_stencil[counter]*_temp_vec[temp_index]);
+                                    //
+                                    counter++;
+
+                                }
+                            }
+                        }
+
+
+                    }
+                }
+            }
+
+            _pdata[global_index] = std::round(neighbour_sum/(pow(_stencil_size,3)*1.0));
+
+
+        }
 
     }
 
@@ -307,10 +460,6 @@ __global__ void push_back(
                                 temp_index = (x_index + l)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y+w ;
                                 neighbour_sum += (_stencil[counter]*_temp_vec[temp_index]);
                                 //
-                                //if(q==1) {
-                                //    temp_index = (x_index)*_max_y + (((_z_index+q+ _stencil_size) % _stencil_size)*_max_y*_max_x) +y ;
-                                //  _pdata[global_index] = _temp_vec[temp_index];
-                                //}
                                 counter++;
 
                             }
@@ -325,9 +474,6 @@ __global__ void push_back(
         _pdata[global_index] = std::round(neighbour_sum/(pow(_stencil_size,3)*1.0));
 
 
-        // temp_index = (x_index)*_max_y + (((_z_index) % _stencil_size)*_max_y*_max_x) ;
-        // _pdata[global_index] = _temp_vec[temp_index+y];
-
     }
 }
 
@@ -338,7 +484,7 @@ __global__ void push_back(
 int main(int argc, char **argv) {
     // Read provided APR file
     cmdLineOptions options = read_command_line_options(argc, argv);
-    const int reps = 1;
+    const int reps = 20;
 
     std::string fileName = options.directory + options.input;
     APR<uint16_t> apr;
@@ -357,7 +503,7 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
-    const int stencil_half = 1;
+    const int stencil_half = 2;
     const int stencil_size = 2*stencil_half+1;
     std::vector<std::float_t> stencil;		// the stencil on the host
     std::float_t stencil_value = 1;
@@ -494,7 +640,7 @@ int main(int argc, char **argv) {
                         std::float_t parts_per_block = num_parts / (num_blocks * 1.0f);
                         std::size_t parts_begin = aprIt.particles_z_begin(lvl, z);
 
-                        unsigned int threads_d = 32;
+                        unsigned int threads_d = 64;
                         unsigned int chunk = ceil((num_blocks) / (1.0f * threads_d))+1;
 
                         dim3 threads_load(threads_d);
@@ -511,37 +657,60 @@ int main(int argc, char **argv) {
 
                         //std::cout << num_blocks << " " << chunk << std::endl;
 
-                        test_iterate << < blocks_load, threads_load >> >
-                                                       (lvl, z, levels, _x_end, _ind_end, offsets, x_num, expected, num_blocks+1);
+                        //test_iterate << < blocks_load, threads_load >> >
+                                 //                      (lvl, z, levels, _x_end, _ind_end, offsets, x_num, expected, num_blocks+1);
 
+
+//                        insert_dynamic << < blocks_load, threads_load >> > (lvl,
+//                                z,
+//                                levels,
+//                                y_ex,
+//                                pdata,
+//                                offsets,
+//                                y_num, x_num,
+//                                particle_values.size(),
+//                                tvec,
+//                                stencil_size, stencil_half,_x_end,_ind_end,num_blocks+1);
+
+
+                        insert << < blocks, threads >> > (lvl,
+                                z ,
+                                levels,
+                                y_ex,
+                                pdata,
+                                offsets,
+                                y_num, x_num,
+                                particle_values.size(),
+                                tvec,
+                                stencil_size, stencil_half);
 //
-//                    insert << < blocks, threads >> > (lvl,
-//                            z + stencil_half,
-//                            levels,
-//                            y_ex,
-//                            pdata,
-//                            offsets,
-//                            y_num, x_num,
-//                            particle_values.size(),
-//                            tvec,
-//                            stencil_size, stencil_half);
-//
-//                    if (cudaGetLastError() != cudaSuccess) {
-//                        std::cerr << "on " << lvl << " the cuda kernel does not run!\n";
-//                        break;
-//                    }
-//                    cudaDeviceSynchronize();
-//
-//                    push_back << < blocks, threads >> > (lvl,
-//                            z,
-//                            levels,
-//                            y_ex,
-//                            tvec,
-//                            offsets,
-//                            y_num, x_num, z_num,
-//                            particle_values.size(),
-//                            expected,
-//                            stencil_size, stencil_half, stencil_pointer);
+                    if (cudaGetLastError() != cudaSuccess) {
+                        std::cerr << "on " << lvl << " the cuda kernel does not run!\n";
+                        break;
+                    }
+                    cudaDeviceSynchronize();
+
+                    push_back << < blocks, threads >> > (lvl,
+                            z,
+                            levels,
+                            y_ex,
+                            tvec,
+                            offsets,
+                            y_num, x_num, z_num,
+                            particle_values.size(),
+                            expected,
+                            stencil_size, stencil_half, stencil_pointer);
+
+//                        push_back_dynamic << < blocks_load, threads_load >> > (lvl,
+//                                z,
+//                                levels,
+//                                y_ex,
+//                                tvec,
+//                                offsets,
+//                                y_num, x_num, z_num,
+//                                particle_values.size(),
+//                                expected,
+//                                stencil_size, stencil_half, stencil_pointer,_x_end,_ind_end,num_blocks+1);
 
                     cudaDeviceSynchronize();
 
@@ -599,10 +768,10 @@ int main(int argc, char **argv) {
             success = false;
 
                 //if(aprIt.level() == 6) {
-                    std::cout << particle_number << std::endl;
-                std::cout << aprIt.x() << " " << aprIt.y() << " " << aprIt.z() << " " << aprIt.level() << " expected: "
-                          << utest_data.data[particle_number] << ", received: " << test_access_data[particle_number]
-                          << std::endl;
+//                    std::cout << particle_number << std::endl;
+//                std::cout << aprIt.x() << " " << aprIt.y() << " " << aprIt.z() << " " << aprIt.level() << " expected: "
+//                          << utest_data.data[particle_number] << ", received: " << test_access_data[particle_number]
+//                          << std::endl;
             //}
             //break;
             c_fail++;
