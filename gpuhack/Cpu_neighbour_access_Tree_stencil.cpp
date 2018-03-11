@@ -303,13 +303,13 @@ int main(int argc, char **argv) {
                         for (int l = -stencil_half; l < stencil_half+1; ++l) {
                             for (int q = -stencil_half; q < stencil_half+1; ++q) {
                                 for (int w = -stencil_half; w < stencil_half+1; ++w) {
-                                    neigh_sum += exp(stencil[counter]*temp_vec.at(k+w, i+q, (z+stencil_size+l)%stencil_size));
+                                    neigh_sum += (stencil[counter]*temp_vec.at(k+w, i+q, (z+stencil_size+l)%stencil_size));
                                     counter++;
                                 }
                             }
                         }
 
-                        part_sum_dense[apr_iterator] = neigh_sum;
+                        part_sum_dense[apr_iterator] = std::round(neigh_sum/(pow(stencil_size,3)*1.0f));
 
                     }//y, pixels/columns
                 }//x , rows
@@ -502,7 +502,7 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
                         }
                     }
 
-                    test_particles[apr_iterator] = neigh_sum;
+                    test_particles[apr_iterator] = std::round(neigh_sum/(1.0f*pow(stencil_size,3)));
 
                 }
             }
