@@ -114,7 +114,7 @@ add_library(aprObjLib OBJECT ${SOURCE_FILES} ${SOURCE_FILES_RAYCAST})
 set(CUDA_TARGET "")
 set(CUDA_APR_TARGET "")
 if(APR_USE_CUDA)
-  enable_language(CUDA)
+    enable_language(CUDA)
     message(STATUS "APR: Building CUDA for APR")
     set(CUDA_PROPAGATE_HOST_FLAGS OFF)
     find_package(CUDA REQUIRED)
@@ -124,21 +124,20 @@ if(APR_USE_CUDA)
     set(CUDA_TARGET cudaLib)
     set(CUDA_APR_TARGET cudaAprLib)
     CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS Auto)
-    list(APPEND CUDA_NVCC_FLAGS )
-
-  set(CUDA_NVCC_FLAGS  "${CUDA_NVCC_FLAGS} -std=c++14 ")
-
+    #list(APPEND CUDA_NVCC_FLAGS "-O0; -Xcompiler -fPIC")#"-std=c++14;-O0; -Xcompiler -fPIC")
     list(APPEND CUDA_NVCC_FLAGS ${ARCH_FLAGS})
+
+    #set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -std=c++14")
 
     cuda_add_library(${CUDA_APR_TARGET} STATIC src/algorithm/number.cu)
     target_link_libraries(${CUDA_APR_TARGET} ${CUDA_LIBRARIES})
     set_target_properties(${CUDA_APR_TARGET} PROPERTIES
-      CUDA_STANDARD 14
-      POSITION_INDEPENDENT_CODE True
-      COMPILE_FLAGS "-DAPR_USE_CUDA"
-      )
+            CUDA_STANDARD 14
+            POSITION_INDEPENDENT_CODE True
+            COMPILE_FLAGS "-DAPR_USE_CUDA"
+            )
     # set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -DAPR_USE_CUDA")
-#     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAPR_USE_CUDA")
+    #     set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DAPR_USE_CUDA")
 endif()
 
 if(APR_BUILD_STATIC_LIB)

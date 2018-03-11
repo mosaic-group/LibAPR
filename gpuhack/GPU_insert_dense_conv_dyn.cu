@@ -19,7 +19,7 @@
 #include "thrust/device_vector.h"
 #include "thrust/tuple.h"
 #include "thrust/copy.h"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cstdint"
+
 
 struct cmdLineOptions{
     std::string output = "output";
