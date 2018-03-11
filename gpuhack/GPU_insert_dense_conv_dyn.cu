@@ -135,10 +135,22 @@ __global__ void load_balance(std::size_t _level,std::size_t _z_index,const thrus
 
     std::size_t index_begin =  floor((thrust::get<0>(_line_offsets[level_zx_offset])-parts_begin)/parts_per_block);
 
-    std::size_t index_end = floor((parts_end-parts_begin)/parts_per_block);
+    std::size_t index_end;
+
+    if(parts_end==parts_begin){
+        index_end=0;
+    } else {
+        index_end = floor((parts_end-parts_begin)/parts_per_block);
+    }
 
     //need to add the loop
     if(index_begin!=index_end){
+
+        if(index_begin==0){
+            _ind_end[0] = parts_begin;
+            _xend[0] = 0;
+        }
+
         for (int i = (index_begin+1); i <= index_end; ++i) {
             _xend[i]=x_index;
             _ind_end[i]= floor(i*parts_per_block) + parts_begin;
@@ -147,17 +159,18 @@ __global__ void load_balance(std::size_t _level,std::size_t _z_index,const thrus
         }
     }
 
+
+
     if(x_index==(_max_x-1)){
         _ind_end[num_blocks-1] = parts_end;
         _xend[num_blocks-1] = (_max_x-1);
         //printf("set i: %d to %d \n",(int)(num_blocks-1), (int)parts_end);
     }
 
-    if(x_index==0){
-        _ind_end[0] = parts_begin;
-        _xend[0] = 0;
-        //printf("set i: %d to %d \n",(int)(num_blocks-1), (int)parts_end);
-    }
+//    if(x_index==0){
+//
+//        //printf("set i: %d to %d \n",(int)(num_blocks-1), (int)parts_end);
+//    }
 
 
 }
@@ -217,14 +230,15 @@ __global__ void test_iterate(std::size_t _level,std::size_t _z_index,const thrus
             parts_end  = _ind_end[load_index];
         }
 
+        if(parts_end==68916){
+            printf("hello ib %d ie %d xbegin %d xend %d load %d\n",(int) parts_begin,(int) parts_end,(int) x_begin,(int) x_end,(int) load_index);
+        }
 
          for (std::size_t p = parts_begin; p < parts_end ; ++p) {
            _pdata[p]+=1;
          }
 
-
     }
-
 
 }
 
@@ -481,26 +495,26 @@ int main(int argc, char **argv) {
                         std::size_t parts_begin = aprIt.particles_z_begin(lvl, z);
 
                         unsigned int threads_d = 32;
-                        unsigned int chunk = ceil((num_blocks) / (1.0f * threads_d));
+                        unsigned int chunk = ceil((num_blocks) / (1.0f * threads_d))+1;
 
-                        dim3 threads_load(32);
+                        dim3 threads_load(threads_d);
                         dim3 blocks_load(chunk);
 
-                        std::cout << parts_per_block << std::endl;
-                        std::cout << parts_begin << std::endl;
-                        std::cout << num_parts << std::endl;
+//                        std::cout << parts_per_block << std::endl;
+//                        std::cout << parts_begin << std::endl;
+//                        std::cout << num_parts << std::endl;
 
 
                         load_balance << < blocks, threads >> >
-                                                  (lvl, z, levels, _x_end, _ind_end, offsets, x_num, num_blocks, parts_per_block, parts_begin);
+                                                  (lvl, z, levels, _x_end, _ind_end, offsets, x_num, num_blocks+1, parts_per_block, parts_begin);
                         cudaDeviceSynchronize();
 
                         //std::cout << num_blocks << " " << chunk << std::endl;
 
                         test_iterate << < blocks_load, threads_load >> >
-                                                       (lvl, z, levels, _x_end, _ind_end, offsets, x_num, expected, num_blocks);
+                                                       (lvl, z, levels, _x_end, _ind_end, offsets, x_num, expected, num_blocks+1);
 
-
+//
 //                    insert << < blocks, threads >> > (lvl,
 //                            z + stencil_half,
 //                            levels,
@@ -528,8 +542,8 @@ int main(int argc, char **argv) {
 //                            particle_values.size(),
 //                            expected,
 //                            stencil_size, stencil_half, stencil_pointer);
-//
-//                    cudaDeviceSynchronize();
+
+                    cudaDeviceSynchronize();
 
                     }
                 }
@@ -579,10 +593,14 @@ int main(int argc, char **argv) {
     for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
+
+
         if(utest_data.data[particle_number]!=test_access_data[particle_number]){
             success = false;
-            //if(aprIt.level() == 3) {
-                std::cout << ((int)particle_number) << aprIt.x() << " " << aprIt.y() << " " << aprIt.z() << " " << aprIt.level() << " expected: "
+
+                //if(aprIt.level() == 6) {
+                    std::cout << particle_number << std::endl;
+                std::cout << aprIt.x() << " " << aprIt.y() << " " << aprIt.z() << " " << aprIt.level() << " expected: "
                           << utest_data.data[particle_number] << ", received: " << test_access_data[particle_number]
                           << std::endl;
             //}

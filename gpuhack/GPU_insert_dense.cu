@@ -71,16 +71,13 @@ __global__ void insert(
     std::size_t                    _stencil_size
     ){
 
-    unsigned int y_index = blockDim.x * blockIdx.x + threadIdx.x;
-    unsigned int x_index = blockDim.y * blockIdx.y + threadIdx.y;
+
+    unsigned int x_index = blockDim.x * blockIdx.x + threadIdx.x;
 
     if(x_index >= _max_x){
         return; // out of bounds
     }
 
-    if(y_index >= _max_y){
-        return; // out of bounds
-    }
 
     auto level_zx_offset = _offsets[_level] + _max_x * _z_index + x_index;
     auto row_start = _line_offsets[level_zx_offset];
@@ -119,14 +116,10 @@ __global__ void push_back(
     std::size_t                    _stencil_size
     ){
 
-    unsigned int y_index = blockDim.x * blockIdx.x + threadIdx.x;
-    unsigned int x_index = blockDim.y * blockIdx.y + threadIdx.y;
+    unsigned int x_index = blockDim.x * blockIdx.x + threadIdx.x;
+
 
     if(x_index >= _max_x){
-        return; // out of bounds
-    }
-
-    if(y_index >= _max_y){
         return; // out of bounds
     }
 
@@ -145,7 +138,7 @@ __global__ void push_back(
          global_index <= particle_index_end; ++global_index) {
 
         auto y = _y_ex[global_index];
-        _pdata[global_index] = _temp_vec[t_index+y];
+        _pdata[global_index] = 1;
 
 
     }
@@ -307,23 +300,21 @@ int main(int argc, char **argv) {
             const int x_num = aprIt.spatial_index_x_max(lvl);
             const int z_num = aprIt.spatial_index_z_max(lvl);
 
-            dim3 threads(32,32);
-            dim3 blocks((y_num + threads.x- 1)/threads.x,
-                        (x_num + threads.y- 1)/threads.y
-                );
+            dim3 threads(32);
+            dim3 blocks((x_num + threads.x- 1)/threads.x);
 
             for(int z = 0;z<z_num;++z){
 
-                insert<<<blocks,threads>>>(lvl,
-                                           z,
-                                           levels,
-                                           y_ex,
-                                           pdata,
-                                           offsets,
-                                           y_num,x_num,
-                                           particle_values.size(),
-                                           tvec,
-                                           stencil_size);
+//                insert<<<blocks,threads>>>(lvl,
+//                                           z,
+//                                           levels,
+//                                           y_ex,
+//                                           pdata,
+//                                           offsets,
+//                                           y_num,x_num,
+//                                           particle_values.size(),
+//                                           tvec,
+//                                           stencil_size);
 
                 if(cudaGetLastError()!=cudaSuccess){
                     std::cerr << "on " << lvl << " the cuda kernel does not run!\n";
