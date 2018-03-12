@@ -573,7 +573,7 @@ int main(int argc, char **argv) {
     thrust::device_vector<std::size_t> d_level_offset(level_offset.begin(),level_offset.end());
 
 
-    std::size_t number_blocks = 1024;
+    std::size_t number_blocks = 8000;
 
     thrust::device_vector<std::uint16_t> d_x_end(number_blocks,0);
     std::uint16_t*   _x_end  =  thrust::raw_pointer_cast(d_x_end.data());
