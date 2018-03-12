@@ -661,20 +661,8 @@ int main(int argc, char **argv) {
                                  //                      (lvl, z, levels, _x_end, _ind_end, offsets, x_num, expected, num_blocks+1);
 
 
-//                        insert_dynamic << < blocks_load, threads_load >> > (lvl,
-//                                z,
-//                                levels,
-//                                y_ex,
-//                                pdata,
-//                                offsets,
-//                                y_num, x_num,
-//                                particle_values.size(),
-//                                tvec,
-//                                stencil_size, stencil_half,_x_end,_ind_end,num_blocks+1);
-
-
-                        insert << < blocks, threads >> > (lvl,
-                                z ,
+                        insert_dynamic << < blocks_load, threads_load >> > (lvl,
+                                z,
                                 levels,
                                 y_ex,
                                 pdata,
@@ -682,7 +670,19 @@ int main(int argc, char **argv) {
                                 y_num, x_num,
                                 particle_values.size(),
                                 tvec,
-                                stencil_size, stencil_half);
+                                stencil_size, stencil_half,_x_end,_ind_end,num_blocks+1);
+
+
+//                        insert << < blocks, threads >> > (lvl,
+//                                z ,
+//                                levels,
+//                                y_ex,
+//                                pdata,
+//                                offsets,
+//                                y_num, x_num,
+//                                particle_values.size(),
+//                                tvec,
+//                                stencil_size, stencil_half);
 //
                     if (cudaGetLastError() != cudaSuccess) {
                         std::cerr << "on " << lvl << " the cuda kernel does not run!\n";
@@ -690,27 +690,27 @@ int main(int argc, char **argv) {
                     }
                     cudaDeviceSynchronize();
 
-                    push_back << < blocks, threads >> > (lvl,
-                            z,
-                            levels,
-                            y_ex,
-                            tvec,
-                            offsets,
-                            y_num, x_num, z_num,
-                            particle_values.size(),
-                            expected,
-                            stencil_size, stencil_half, stencil_pointer);
+//                    push_back << < blocks, threads >> > (lvl,
+//                            z,
+//                            levels,
+//                            y_ex,
+//                            tvec,
+//                            offsets,
+//                            y_num, x_num, z_num,
+//                            particle_values.size(),
+//                            expected,
+//                            stencil_size, stencil_half, stencil_pointer);
 
-//                        push_back_dynamic << < blocks_load, threads_load >> > (lvl,
-//                                z,
-//                                levels,
-//                                y_ex,
-//                                tvec,
-//                                offsets,
-//                                y_num, x_num, z_num,
-//                                particle_values.size(),
-//                                expected,
-//                                stencil_size, stencil_half, stencil_pointer,_x_end,_ind_end,num_blocks+1);
+                        push_back_dynamic << < blocks_load, threads_load >> > (lvl,
+                                z,
+                                levels,
+                                y_ex,
+                                tvec,
+                                offsets,
+                                y_num, x_num, z_num,
+                                particle_values.size(),
+                                expected,
+                                stencil_size, stencil_half, stencil_pointer,_x_end,_ind_end,num_blocks+1);
 
                     cudaDeviceSynchronize();
 
