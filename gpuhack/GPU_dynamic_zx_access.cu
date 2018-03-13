@@ -128,6 +128,9 @@ __global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* r
 __global__ void test_dynamic_balance(const thrust::tuple<std::size_t,std::size_t>* row_info,std::size_t*  _chunk_index_end,
                                      std::size_t total_number_chunks,const std::uint16_t* particle_y,std::uint16_t* particle_data_output);
 
+__global__ void test_dynamic_balance_XZYL(const thrust::tuple<std::size_t,std::size_t>* row_info,std::size_t*  _chunk_index_end,
+                                          std::size_t total_number_chunks,const std::uint16_t* particle_y,std::uint16_t* particle_data_output);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -247,7 +250,7 @@ int main(int argc, char **argv) {
      *
      */
 
-    std::size_t max_number_chunks = 4096;
+    std::size_t max_number_chunks = 8000;
     thrust::device_vector<std::size_t> d_ind_end(max_number_chunks,0);
     std::size_t*   chunk_index_end  =  thrust::raw_pointer_cast(d_ind_end.data());
 
@@ -276,7 +279,7 @@ int main(int argc, char **argv) {
 
     std::size_t actual_number_chunks = total_number_particles/parts_per_chunk + 1; // actual number of chunks realized based on the constraints on the total number of particles and maximum row
 
-    dim3 threads(64);
+    dim3 threads(32);
     dim3 blocks((total_number_rows + threads.x - 1)/threads.x);
 
     std::cout << "Particles per chunk: " << parts_per_chunk << " Total number of chunks: " << actual_number_chunks << std::endl;
@@ -298,7 +301,7 @@ int main(int argc, char **argv) {
 
     timer.start_timer("iterate over all particles");
 
-    dim3 threads_dyn(64);
+    dim3 threads_dyn(32);
     dim3 blocks_dyn((actual_number_chunks + threads_dyn.x - 1)/threads_dyn.x);
 
     for (int rep = 0; rep < number_reps; ++rep) {
@@ -314,6 +317,8 @@ int main(int argc, char **argv) {
     float gpu_iterate_time = timer.timings.back();
 
 
+
+
     /*
      *  Off-load the particle data from the GPU
      *
@@ -325,6 +330,28 @@ int main(int argc, char **argv) {
     thrust::copy(d_test_access_data.begin(), d_test_access_data.end(), test_access_data.begin());
 
     timer.stop_timer();
+
+    /*
+    *  Test the x,y,z,level information is correct
+    *
+    */
+
+    thrust::device_vector<std::uint16_t> d_spatial_info_test(total_number_particles,0); // output data
+    std::uint16_t* spatial_info_test = thrust::raw_pointer_cast(d_spatial_info_test.data());
+
+
+    timer.start_timer("summing the sptial informatino for each partilce on the GPU");
+
+
+    test_dynamic_balance_XZYL << < blocks_dyn, threads_dyn >> >
+                                               (row_info, chunk_index_end, actual_number_chunks, particle_y, spatial_info_test);
+
+    cudaDeviceSynchronize();
+
+    timer.stop_timer();
+
+    ExtraParticleData<uint16_t> spatial_data_host(apr);
+    thrust::copy(d_spatial_info_test.begin(), d_spatial_info_test.end(), spatial_data_host.data.begin());
 
 
 
@@ -352,11 +379,10 @@ int main(int argc, char **argv) {
 
     std::cout << "SPEEDUP GPU vs. CPU iterate= " << cpu_iterate_time/gpu_iterate_time << std::endl;
 
-    timer.start_timer("Performance comparison on CPU OpenMP");
+    timer.start_timer("Performance comparison on CPU OpenMP * NOT WOKRING"); //not working
     for (int rep = 0; rep < number_reps; ++rep) {
-#ifdef HAVE_OPENMP
+
 #pragma omp parallel for schedule(static) private(particle_number) firstprivate(aprIt)
-#endif
         for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
             //This step is required for all loops to set the iterator by the particle number
             aprIt.set_iterator_to_particle_by_number(particle_number);
@@ -393,9 +419,38 @@ int main(int argc, char **argv) {
     }
 
     if(success){
-        std::cout << "PASS" << std::endl;
+        std::cout << "Iteration Check, PASS" << std::endl;
     } else {
-        std::cout << "FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
+        std::cout << "Iteration Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
+    }
+
+
+    /*
+     *  Check the spatial data, by comparing x+y+z+level for every particle
+     *
+     */
+
+    c_pass = 0;
+    c_fail = 0;
+    success=true;
+
+
+    for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+        //This step is required for all loops to set the iterator by the particle number
+        aprIt.set_iterator_to_particle_by_number(particle_number);
+        if(spatial_data_host[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
+            c_pass++;
+        } else {
+            c_fail++;
+            success = false;
+            //std::cout << test_access_data[particle_number] << " Level: " < aprIt.level() << std::endl;
+        }
+    }
+
+    if(success){
+        std::cout << "Spatial information Check, PASS" << std::endl;
+    } else {
+        std::cout << "Spatial information Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
     }
 
 }
@@ -421,11 +476,54 @@ __global__ void test_dynamic_balance(const thrust::tuple<std::size_t,std::size_t
 
     row_end = _chunk_index_end[chunk_index];
 
-//    if(chunk_index == 0){
-//        printf("Begin chunk %d \n",(int)row_end);
-//    } else if(chunk_index == (total_number_chunks-1)){
-//        printf("End chunk %d \n",(int)row_end);
-//    }
+    std::size_t particle_global_index_begin;
+    std::size_t particle_global_index_end;
+
+    std::size_t current_row_key;
+
+    for (std::size_t current_row = row_begin; current_row <= row_end; ++current_row) {
+        current_row_key = thrust::get<0>(row_info[current_row]);
+        if(current_row_key&1) { //checks if there any particles in the row
+
+            particle_global_index_end = thrust::get<1>(row_info[current_row]);
+
+            if (current_row == 0) {
+                particle_global_index_begin = 0;
+            } else {
+                particle_global_index_begin = thrust::get<1>(row_info[current_row-1]);
+            }
+
+            //loop over the particles in the row
+            for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
+
+                particle_data_output[particle_global_index]+=1;
+            }
+        }
+    }
+
+
+}
+
+__global__ void test_dynamic_balance_XZYL(const thrust::tuple<std::size_t,std::size_t>* row_info,std::size_t*  _chunk_index_end,
+                                     std::size_t total_number_chunks,const std::uint16_t* particle_y,std::uint16_t* particle_data_output){
+
+    int chunk_index = blockDim.x * blockIdx.x + threadIdx.x; // the input to each kernel is its chunk index for which it should iterate over
+
+    if(chunk_index >= total_number_chunks){
+        return; //out of bounds
+    }
+
+    //load in the begin and end row indexs
+    std::size_t row_begin;
+    std::size_t row_end;
+
+    if(chunk_index==0){
+        row_begin = 0;
+    } else {
+        row_begin = _chunk_index_end[chunk_index-1] + 1; //This chunk starts the row after the last one finished.
+    }
+
+    row_end = _chunk_index_end[chunk_index];
 
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
@@ -456,7 +554,7 @@ __global__ void test_dynamic_balance(const thrust::tuple<std::size_t,std::size_t
             //loop over the particles in the row
             for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
                 uint16_t current_y = particle_y[particle_global_index];
-                particle_data_output[particle_global_index]+=1;
+                particle_data_output[particle_global_index]=current_y+x+z+level;
             }
 
         }
