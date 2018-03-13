@@ -20,6 +20,7 @@
 #include "thrust/tuple.h"
 #include "thrust/copy.h"
 #include "../src/misc/APRTimer.hpp"
+#include "../src/data_structures/APR/ExtraParticleData.hpp"
 
 #define KEY_EMPTY_MASK ((((uint64_t)1) << 1) - 1) << 0 //first bit stores if the row is empty or not can be used to avoid computations and accessed using &key
 #define KEY_EMPTY_SHIFT 0
@@ -146,6 +147,12 @@ int main(int argc, char **argv) {
     // Get dense representation of APR
     APRIterator<uint16_t> aprIt(apr);
 
+#ifdef APR_USE_CUDA
+    std::cout << "hello" << std::endl;
+#endif
+
+
+
     ///////////////////////////
     ///
     /// Sparse Data for GPU
@@ -156,13 +163,6 @@ int main(int argc, char **argv) {
     std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
     std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
-    const int stencil_half = 2;
-    const int stencil_size = 2*stencil_half+1;
-    std::vector<std::float_t> stencil;		// the stencil on the host
-    std::float_t stencil_value = 1;
-    stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
-
-    std::cout << stencil[0] << std::endl;
 
 
     std::size_t x = 0;
@@ -237,7 +237,7 @@ int main(int argc, char **argv) {
 
     thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end()); //y-coordinates
     thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end()); //particle values
-    thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),0); // output data
+
 
     thrust::device_vector<std::size_t> d_level_offset(level_offset.begin(),level_offset.end()); //cumsum of number of rows in lower levels
 
@@ -254,7 +254,11 @@ int main(int argc, char **argv) {
     const std::uint16_t*             particle_y   =  thrust::raw_pointer_cast(d_y_explicit.data());
     const std::uint16_t*             pdata  =  thrust::raw_pointer_cast(d_particle_values.data());
     const std::size_t*             offsets= thrust::raw_pointer_cast(d_level_offset.data());
-    std::uint16_t*                   particle_data_output = thrust::raw_pointer_cast(d_test_access_data.data());
+
+
+    ExtraParticleData<uint16_t> iteration_check_particles(apr);
+    iteration_check_particles.init_gpu(apr.total_number_particles());
+
 
     timer.stop_timer();
 
@@ -303,7 +307,7 @@ int main(int argc, char **argv) {
     for (int rep = 0; rep < number_reps; ++rep) {
 
         test_dynamic_balance << < blocks_dyn, threads_dyn >> >
-                                              (row_info, chunk_index_end, actual_number_chunks, particle_y, particle_data_output);
+                                              (row_info, chunk_index_end, actual_number_chunks, particle_y, iteration_check_particles.gpu_pointer);
         cudaDeviceSynchronize();
     }
 
@@ -322,8 +326,7 @@ int main(int argc, char **argv) {
 
     timer.start_timer("output transfer from GPU");
 
-    std::vector<std::uint16_t> test_access_data(d_test_access_data.size());
-    thrust::copy(d_test_access_data.begin(), d_test_access_data.end(), test_access_data.begin());
+    iteration_check_particles.copy_data_to_host();
 
     timer.stop_timer();
 
@@ -332,15 +335,17 @@ int main(int argc, char **argv) {
     *
     */
 
-    thrust::device_vector<std::uint16_t> d_spatial_info_test(total_number_particles,0); // output data
-    std::uint16_t* spatial_info_test = thrust::raw_pointer_cast(d_spatial_info_test.data());
+
+    ExtraParticleData<uint16_t> spatial_info_test(apr);
+    spatial_info_test.init_gpu(apr.total_number_particles());
+
 
 
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
 
         test_dynamic_balance_XZYL << < blocks_dyn, threads_dyn >> >
-                                                   (row_info, chunk_index_end, actual_number_chunks, particle_y, spatial_info_test);
+                                                   (row_info, chunk_index_end, actual_number_chunks, particle_y, spatial_info_test.gpu_pointer);
 
         cudaDeviceSynchronize();
     }
@@ -349,8 +354,7 @@ int main(int argc, char **argv) {
 
     float gpu_iterate_time_si = timer.timings.back();
 
-    ExtraParticleData<uint16_t> spatial_data_host(apr);
-    thrust::copy(d_spatial_info_test.begin(), d_spatial_info_test.end(), spatial_data_host.data.begin());
+    spatial_info_test.copy_data_to_host();
 
 
 
@@ -413,7 +417,7 @@ int main(int argc, char **argv) {
     for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
-        if(test_access_data[particle_number]==number_reps){
+        if(iteration_check_particles[aprIt]==number_reps){
             c_pass++;
         } else {
             c_fail++;
@@ -442,7 +446,7 @@ int main(int argc, char **argv) {
     for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
-        if(spatial_data_host[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
+        if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
             c_pass++;
         } else {
             c_fail++;

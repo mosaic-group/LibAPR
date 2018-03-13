@@ -5,6 +5,16 @@
 #ifndef PARTPLAY_EXTRAPARTICLEDATA_HPP
 #define PARTPLAY_EXTRAPARTICLEDATA_HPP
 
+#define APR_USE_CUDA
+
+#ifdef APR_USE_CUDA
+#include "thrust/device_vector.h"
+#include "thrust/tuple.h"
+#include "thrust/copy.h"
+#endif
+
+
+
 
 #include <algorithm>
 
@@ -21,6 +31,38 @@ private:
     static const uint64_t parallel_particle_number_threshold = 5000000l;
 
 public:
+
+
+#ifdef APR_USE_CUDA
+
+    thrust::device_vector<DataType> gpu_data;
+    DataType* gpu_pointer;
+
+    void init_gpu(std::size_t number_particles){
+        gpu_data.resize(number_particles);
+        gpu_pointer = thrust::raw_pointer_cast(gpu_data.data());
+    }
+
+    void copy_data_to_gpu(){
+        //copy info to device
+        if(gpu_data.size!=data.size()){
+            gpu_data.resize(data.size());
+        }
+
+        thrust::copy(data.begin(),data.end(),gpu_data.begin());
+        //set up the pointers
+        gpu_pointer = thrust::raw_pointer_cast(gpu_data.data());
+
+    }
+
+    void copy_data_to_host(){
+        //copy back from gpu
+        thrust::copy(gpu_data.begin(),gpu_data.end(),data.begin());
+    }
+
+
+
+#endif
 
     std::vector<DataType> data;
 
