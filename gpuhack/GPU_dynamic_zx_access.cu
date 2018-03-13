@@ -19,6 +19,7 @@
 #include "thrust/device_vector.h"
 #include "thrust/tuple.h"
 #include "thrust/copy.h"
+#include "../src/misc/APRTimer.hpp"
 
 #define KEY_EMPTY_MASK ((((uint64_t)1) << 1) - 1) << 0 //first bit stores if the row is empty or not can be used to avoid computations and accessed using &key
 #define KEY_EMPTY_SHIFT 0
@@ -246,7 +247,7 @@ int main(int argc, char **argv) {
      *
      */
 
-    std::size_t max_number_chunks = 8000;
+    std::size_t max_number_chunks = 4096;
     thrust::device_vector<std::size_t> d_ind_end(max_number_chunks,0);
     std::size_t*   chunk_index_end  =  thrust::raw_pointer_cast(d_ind_end.data());
 
@@ -278,7 +279,10 @@ int main(int argc, char **argv) {
     dim3 threads(64);
     dim3 blocks((total_number_rows + threads.x - 1)/threads.x);
 
+    std::cout << "Particles per chunk: " << parts_per_chunk << " Total number of chunks: " << actual_number_chunks << std::endl;
+
     load_balance_xzl<<<blocks,threads>>>(row_info,chunk_index_end,actual_number_chunks,parts_per_chunk,total_number_rows);
+    cudaDeviceSynchronize();
 
     timer.stop_timer();
 
@@ -288,15 +292,26 @@ int main(int argc, char **argv) {
      *
      */
 
+
+    int number_reps = 10;
+
+
     timer.start_timer("iterate over all particles");
 
     dim3 threads_dyn(64);
-    dim3 blocks_dyn((actual_number_chunks + threads.x - 1)/threads.x);
+    dim3 blocks_dyn((actual_number_chunks + threads_dyn.x - 1)/threads_dyn.x);
 
-    test_dynamic_balance<<<blocks_dyn,threads_dyn>>>(row_info,chunk_index_end,actual_number_chunks,particle_y,particle_data_output);
+    for (int rep = 0; rep < number_reps; ++rep) {
+
+        test_dynamic_balance << < blocks_dyn, threads_dyn >> >
+                                              (row_info, chunk_index_end, actual_number_chunks, particle_y, particle_data_output);
+        cudaDeviceSynchronize();
+    }
+
 
     timer.stop_timer();
 
+    float gpu_iterate_time = timer.timings.back();
 
 
     /*
@@ -308,6 +323,48 @@ int main(int argc, char **argv) {
 
     std::vector<std::uint16_t> test_access_data(d_test_access_data.size());
     thrust::copy(d_test_access_data.begin(), d_test_access_data.end(), test_access_data.begin());
+
+    timer.stop_timer();
+
+
+
+    /*
+    *  Performance comparison with CPU
+    *
+    */
+
+    ExtraParticleData<uint16_t> test_cpu(apr);
+
+    timer.start_timer("Performance comparison on CPU serial");
+    for (int rep = 0; rep < number_reps; ++rep) {
+        for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+            //This step is required for all loops to set the iterator by the particle number
+            aprIt.set_iterator_to_particle_by_number(particle_number);
+
+            test_cpu[aprIt] += 1;
+
+        }
+    }
+
+    timer.stop_timer();
+
+    float cpu_iterate_time = timer.timings.back();
+
+    std::cout << "SPEEDUP GPU vs. CPU iterate= " << cpu_iterate_time/gpu_iterate_time << std::endl;
+
+    timer.start_timer("Performance comparison on CPU OpenMP");
+    for (int rep = 0; rep < number_reps; ++rep) {
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(static) private(particle_number) firstprivate(aprIt)
+#endif
+        for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+            //This step is required for all loops to set the iterator by the particle number
+            aprIt.set_iterator_to_particle_by_number(particle_number);
+
+            test_cpu[aprIt] += 1;
+
+        }
+    }
 
     timer.stop_timer();
 
@@ -326,12 +383,12 @@ int main(int argc, char **argv) {
     for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
-        if(test_access_data[particle_number]==1){
+        if(test_access_data[particle_number]==number_reps){
             c_pass++;
         } else {
             c_fail++;
             success = false;
-            std::cout << test_access_data[particle_number] << " Level: " << aprIt.level() << std::endl;
+            //std::cout << test_access_data[particle_number] << " Level: " < aprIt.level() << std::endl;
         }
     }
 
@@ -364,12 +421,18 @@ __global__ void test_dynamic_balance(const thrust::tuple<std::size_t,std::size_t
 
     row_end = _chunk_index_end[chunk_index];
 
+//    if(chunk_index == 0){
+//        printf("Begin chunk %d \n",(int)row_end);
+//    } else if(chunk_index == (total_number_chunks-1)){
+//        printf("End chunk %d \n",(int)row_end);
+//    }
+
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
 
     std::size_t current_row_key;
 
-    for (std::size_t current_row = row_begin; current_row < row_end; ++current_row) {
+    for (std::size_t current_row = row_begin; current_row <= row_end; ++current_row) {
         current_row_key = thrust::get<0>(row_info[current_row]);
         if(current_row_key&1) { //checks if there any particles in the row
 
@@ -413,17 +476,17 @@ __global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* r
         return;
     }
 
-    std::size_t key= thrust::get<0>(row_info[row_index]);
-
-    if(!key&1){
-        return; //empty row
-    }
+//    std::size_t key= thrust::get<0>(row_info[row_index]);
+//
+//    if(!key&1){
+//        return; //empty row
+//    }
 
     std::size_t index_end = thrust::get<1>(row_info[row_index]);
     std::size_t index_begin;
 
     if(row_index > 0){
-        index_begin = thrust::get<0>(row_info[row_index]);
+        index_begin = thrust::get<1>(row_info[row_index-1]);
     } else {
         index_begin =0;
     }
@@ -439,49 +502,6 @@ __global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* r
         _chunk_index_end[total_number_chunks-1]=total_number_rows-1;
     }
 
-
-
-
-
-
-//    int z_index = blockDim.y * blockIdx.y + threadIdx.y;
-//
-//    if(x_index >= _max_x){
-//        return; // out of bounds
-//    }
-//
-//    //printf("Hello from dim: %d block: %d, thread: %d  x index: %d z: %d \n",blockDim.x, blockIdx.x, threadIdx.x,x_index,(int) _z_index);
-//
-//    auto level_zx_offset = _offsets[_level] + _max_x * _z_index + x_index;
-//
-//    std::size_t parts_end = thrust::get<1>(row_info[level_zx_offset]);
-//
-//    std::size_t index_begin =  floor((thrust::get<0>(row_info[level_zx_offset])-parts_begin)/parts_per_block);
-//
-//    std::size_t index_end;
-//
-//    if(parts_end==parts_begin){
-//        index_end=0;
-//    } else {
-//        index_end = floor((parts_end-parts_begin)/parts_per_block);
-//    }
-//
-//    //need to add the loop
-//    if(index_begin!=index_end){
-//
-//
-//        for (int i = (index_begin+1); i <= index_end; ++i) {
-//            _xend[i]=x_index;
-//
-//        }
-//    }
-//
-//
-//    if(x_index==(_max_x-1)){
-//        _ind_end[num_blocks-1] = parts_end;
-//        _xend[num_blocks-1] = (_max_x-1);
-//
-//    }
 
 
 }
