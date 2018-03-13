@@ -26,6 +26,38 @@
 #define KEY_LEVEL_MASK ((((uint64_t)1) << 8) - 1) << 33
 #define KEY_LEVEL_SHIFT 33
 
+__global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* row_info,std::size_t*  _chunk_index_end,
+                                 std::size_t total_number_chunks,std::float_t parts_per_block,std::size_t total_number_rows){
+
+    int row_index = blockDim.x * blockIdx.x + threadIdx.x;
+
+    if(row_index>=total_number_rows){
+        return;
+    }
+
+    std::size_t index_end = thrust::get<1>(row_info[row_index]);
+    std::size_t index_begin;
+
+    if(row_index > 0){
+        index_begin = thrust::get<1>(row_info[row_index-1]);
+    } else {
+        index_begin =0;
+    }
+
+    std::size_t chunk_start = floor(index_begin/parts_per_block);
+    std::size_t chunk_end =  floor(index_end/parts_per_block);
+
+    if(chunk_start!=chunk_end){
+        _chunk_index_end[chunk_end]=row_index;
+    }
+
+    if(row_index == (total_number_rows-1)){
+        _chunk_index_end[total_number_chunks-1]=total_number_rows-1;
+    }
+
+
+}
+
 struct GPUAccessPtrs{
     const thrust::tuple<std::size_t,std::size_t>* row_info;
     std::size_t*  _chunk_index_end;
@@ -37,10 +69,21 @@ class GPUAPRAccess {
 
 public:
 
-    std::size_t maximum_number_chunks;
+    GPUAccessPtrs gpu_access;
+    GPUAccessPtrs* gpu_access_ptr;
+
+    //device access data
+    thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start;
+    thrust::device_vector<std::uint16_t> d_y_part_coord; //y-coordinates
+    thrust::device_vector<std::uint16_t> d_particle_values; //particle values
+    thrust::device_vector<std::size_t> d_level_offset; //cumsum of number of rows in lower levels
+    thrust::device_vector<std::size_t> d_chunk_index_end;
+
+    std::size_t max_number_chunks = 8191;
+    std::size_t actual_number_chunks;
 
     template<typename T>
-    GPUAPRAccess(APR<T>& apr){
+    GPUAPRAccess(APR<T>& apr,uint64_t max_number_chunks = 8191):max_number_chunks(max_number_chunks){
         initialize_gpu_access(apr);
     }
     template<typename T>
@@ -52,11 +95,14 @@ public:
         ///
         ///////////////////////////
 
-        std::vector<std::tuple<std::size_t,std::size_t>> level_zx_index_start;//size = number of rows on all levels
-        std::vector<std::uint16_t> y_explicit;y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
-        std::vector<std::uint16_t> particle_values;particle_values.reserve(aprIt.total_number_particles());//size = number of particles
-        std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
+        APRIterator<T> aprIt(apr);
 
+        std::vector<std::tuple<std::size_t,std::size_t>> level_zx_index_start;//size = number of rows on all levels
+        std::vector<std::uint16_t> y_explicit;
+        y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
+        std::vector<std::uint16_t> particle_values;
+        particle_values.reserve(aprIt.total_number_particles());//size = number of particles
+        std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
 
         std::size_t x = 0;
         std::size_t z = 0;
@@ -64,7 +110,6 @@ public:
         std::size_t zx_counter = 0;
         std::size_t pcounter = 0;
 
-        APRIterator<T> aprIt(apr);
 
 
         uint64_t bundle_xzl=0;
@@ -117,24 +162,52 @@ public:
                               return thrust::make_tuple(std::get<0>(_el), std::get<1>(_el));
                           } );
 
-        thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start = h_level_zx_index_start;
+        //copy to device
+        d_level_zx_index_start = h_level_zx_index_start;
+        d_y_part_coord.resize(apr.total_number_particles());
+        thrust::copy(y_explicit.begin(), y_explicit.end(),d_y_part_coord.data()); //y-coordinates
+        d_level_offset.resize(aprIt.level_max()+1);
+        thrust::copy(level_offset.begin(),level_offset.end(),d_level_offset.data()); //cumsum of number of rows in lower levels
 
+        d_chunk_index_end.resize(max_number_chunks);
 
-        thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end()); //y-coordinates
-        thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end()); //particle values
-
-
-        thrust::device_vector<std::size_t> d_level_offset(level_offset.begin(),level_offset.end()); //cumsum of number of rows in lower levels
-
-
-        std::size_t max_number_chunks = 8191;
-        thrust::device_vector<std::size_t> d_ind_end(max_number_chunks,0);
-        std::size_t*   chunk_index_end  =  thrust::raw_pointer_cast(d_ind_end.data());
+        std::size_t*   chunk_index_end  =  thrust::raw_pointer_cast(d_chunk_index_end.data());
 
         const thrust::tuple<std::size_t,std::size_t>* row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
-        const std::uint16_t*             particle_y   =  thrust::raw_pointer_cast(d_y_explicit.data());
-        const std::uint16_t*             pdata  =  thrust::raw_pointer_cast(d_particle_values.data());
+        const std::uint16_t*             particle_y   =  thrust::raw_pointer_cast(d_y_part_coord.data());
         const std::size_t*             offsets= thrust::raw_pointer_cast(d_level_offset.data());
+
+        timer.start_timer("load balancing");
+
+        std::cout << "Total number of rows: " << total_number_rows << std::endl;
+
+        std::size_t total_number_particles = apr.total_number_particles();
+
+        //Figuring out how many particles per chunk are required
+        std::size_t max_particles_per_row = apr.orginal_dimensions(0); //maximum number of particles in a row
+        std::size_t parts_per_chunk = std::max((std::size_t)(max_particles_per_row+1),(std::size_t) floor(total_number_particles/max_number_chunks)); // to gurantee every chunk stradles across more then one row, the minimum particle chunk needs ot be larger then the largest possible number of particles in a row
+
+        actual_number_chunks = total_number_particles/parts_per_chunk + 1; // actual number of chunks realized based on the constraints on the total number of particles and maximum row
+
+        dim3 threads(32);
+        dim3 blocks((total_number_rows + threads.x - 1)/threads.x);
+
+        std::cout << "Particles per chunk: " << parts_per_chunk << " Total number of chunks: " << actual_number_chunks << std::endl;
+
+        load_balance_xzl<<<blocks,threads>>>(row_info,chunk_index_end,actual_number_chunks,parts_per_chunk,total_number_rows);
+        cudaDeviceSynchronize();
+
+        timer.stop_timer();
+
+        //set up gpu pointers
+        gpu_access.row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
+        gpu_access._chunk_index_end = thrust::raw_pointer_cast(d_chunk_index_end.data());
+        gpu_access.total_number_chunks = actual_number_chunks;
+        gpu_access.y_part_coord = thrust::raw_pointer_cast(d_y_part_coord.data());
+
+        //transfer data across
+        cudaMalloc((void**)&gpu_access_ptr, sizeof(GPUAccessPtrs));
+        cudaMemcpy(gpu_access_ptr, &gpu_access, sizeof(GPUAccessPtrs), cudaMemcpyHostToDevice);
 
     }
 
@@ -175,37 +248,6 @@ public:
 
     }
 
-    __global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* row_info,std::size_t*  _chunk_index_end,
-                                     std::size_t total_number_chunks,std::float_t parts_per_block,std::size_t total_number_rows){
-
-        int row_index = blockDim.x * blockIdx.x + threadIdx.x;
-
-        if(row_index>=total_number_rows){
-            return;
-        }
-
-        std::size_t index_end = thrust::get<1>(row_info[row_index]);
-        std::size_t index_begin;
-
-        if(row_index > 0){
-            index_begin = thrust::get<1>(row_info[row_index-1]);
-        } else {
-            index_begin =0;
-        }
-
-        std::size_t chunk_start = floor(index_begin/parts_per_block);
-        std::size_t chunk_end =  floor(index_end/parts_per_block);
-
-        if(chunk_start!=chunk_end){
-            _chunk_index_end[chunk_end]=row_index;
-        }
-
-        if(row_index == (total_number_rows-1)){
-            _chunk_index_end[total_number_chunks-1]=total_number_rows-1;
-        }
-
-
-    }
 
 };
 

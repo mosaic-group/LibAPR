@@ -96,112 +96,41 @@ int main(int argc, char **argv) {
     // Get dense representation of APR
     APRIterator<uint16_t> aprIt(apr);
 
-#ifdef APR_USE_CUDA
-    std::cout << "hello" << std::endl;
-#endif
-
-
-
     APRTimer timer;
     timer.verbose_flag = true;
 
 
-
-    ////////////////////
-    ///
-    /// Example of doing our level,z,x access using the GPU data structure
-    ///
-    /////////////////////
-    timer.start_timer("transfer structures to GPU");
-
-
-
-
     /*
-     * Dynamic load balancing of the APR data-structure variables
+     * Set up the GPU Access data structures
      *
      */
 
-
-
-
-    ExtraParticleData<uint16_t> iteration_check_particles(apr);
-    iteration_check_particles.init_gpu(apr.total_number_particles());
-
-
-    timer.stop_timer();
-
-    /*
-     * Dynamic load balancing of the APR data-structure variables
-     *
-     */
-
-
-
-
-
-    timer.start_timer("load balancing");
-
-    std::cout << "Total number of rows: " << total_number_rows << std::endl;
-
-    std::size_t total_number_particles = apr.total_number_particles();
-
-    //Figuring out how many particles per chunk are required
-    std::size_t max_particles_per_row = apr.orginal_dimensions(0); //maximum number of particles in a row
-    std::size_t parts_per_chunk = std::max((std::size_t)(max_particles_per_row+1),(std::size_t) floor(total_number_particles/max_number_chunks)); // to gurantee every chunk stradles across more then one row, the minimum particle chunk needs ot be larger then the largest possible number of particles in a row
-
-    std::size_t actual_number_chunks = total_number_particles/parts_per_chunk + 1; // actual number of chunks realized based on the constraints on the total number of particles and maximum row
-
-    dim3 threads(32);
-    dim3 blocks((total_number_rows + threads.x - 1)/threads.x);
-
-    std::cout << "Particles per chunk: " << parts_per_chunk << " Total number of chunks: " << actual_number_chunks << std::endl;
-
-    load_balance_xzl<<<blocks,threads>>>(row_info,chunk_index_end,actual_number_chunks,parts_per_chunk,total_number_rows);
-    cudaDeviceSynchronize();
-
-    timer.stop_timer();
-
-    GPUAccessPtrs gpu_access;
-    GPUAccessPtrs* gpu_access_ptr;
-
-    gpu_access.row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
-    gpu_access._chunk_index_end = thrust::raw_pointer_cast(d_ind_end.data());
-    gpu_access.total_number_chunks = actual_number_chunks;
-    gpu_access.y_part_coord = thrust::raw_pointer_cast(d_y_explicit.data());
-
-    cudaMalloc((void**)&gpu_access_ptr, sizeof(GPUAccessPtrs));
-
-    cudaMemcpy(gpu_access_ptr, &gpu_access, sizeof(GPUAccessPtrs), cudaMemcpyHostToDevice);
-
+    GPUAPRAccess gpuaprAccess(apr);
 
     /*
      *  Now launch the kernels across all the chunks determiend by the load balancing
      *
      */
 
+    ExtraParticleData<uint16_t> iteration_check_particles(apr);
+    iteration_check_particles.init_gpu(apr.total_number_particles());
 
     int number_reps = 40;
-
 
     timer.start_timer("iterate over all particles");
 
     dim3 threads_dyn(32);
-    dim3 blocks_dyn((actual_number_chunks + threads_dyn.x - 1)/threads_dyn.x);
+    dim3 blocks_dyn((gpuaprAccess.actual_number_chunks + threads_dyn.x - 1)/threads_dyn.x);
 
     for (int rep = 0; rep < number_reps; ++rep) {
 
-        test_dynamic_balance << < blocks_dyn, threads_dyn >> > (gpu_access_ptr, iteration_check_particles.gpu_pointer);
+        test_dynamic_balance << < blocks_dyn, threads_dyn >> > (gpuaprAccess.gpu_access_ptr, iteration_check_particles.gpu_pointer);
         cudaDeviceSynchronize();
     }
-
 
     timer.stop_timer();
 
     float gpu_iterate_time = timer.timings.back();
-
-
-
 
     /*
      *  Off-load the particle data from the GPU
@@ -219,17 +148,14 @@ int main(int argc, char **argv) {
     *
     */
 
-
     ExtraParticleData<uint16_t> spatial_info_test(apr);
     spatial_info_test.init_gpu(apr.total_number_particles());
-
-
 
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
 
         test_dynamic_balance_XZYL << < blocks_dyn, threads_dyn >> >
-                                                   (gpu_access_ptr, spatial_info_test.gpu_pointer);
+                                                   (gpuaprAccess.gpu_access_ptr, spatial_info_test.gpu_pointer);
 
         cudaDeviceSynchronize();
     }
@@ -237,9 +163,8 @@ int main(int argc, char **argv) {
     timer.stop_timer();
 
     float gpu_iterate_time_si = timer.timings.back();
-
+    //copy data back from gpu
     spatial_info_test.copy_data_to_host();
-
 
 
     /*
