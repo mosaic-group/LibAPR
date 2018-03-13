@@ -20,9 +20,57 @@
 #include "thrust/tuple.h"
 #include "thrust/copy.h"
 
-#define X_MASK ((((uint64_t)1) << 2) - 1)
-#define X_SHIFT 1
+#define KEY_EMPTY_MASK ((((uint64_t)1) << 1) - 1) << 0 //first bit stores if the row is empty or not can be used to avoid computations and accessed using &key
+#define KEY_EMPTY_SHIFT 0
 
+#define KEY_X_MASK ((((uint64_t)1) << 16) - 1) << 1
+#define KEY_X_SHIFT 1
+
+#define KEY_Z_MASK ((((uint64_t)1) << 16) - 1) << 17
+#define KEY_Z_SHIFT 17
+
+#define KEY_LEVEL_MASK ((((uint64_t)1) << 8) - 1) << 33
+#define KEY_LEVEL_SHIFT 33
+
+
+
+uint64_t encode_xzl(uint16_t x,uint16_t z,uint8_t level,bool nonzero){
+
+    uint64_t raw_key=0;
+
+    raw_key |= ((uint64_t)x << KEY_X_SHIFT);
+    raw_key |= ((uint64_t)z << KEY_Z_SHIFT);
+    raw_key |= ((uint64_t)level << KEY_LEVEL_SHIFT);
+
+    if(nonzero){
+        raw_key |= (1 << KEY_EMPTY_SHIFT);
+    } else {
+        raw_key |= (0 << KEY_EMPTY_SHIFT);
+    }
+
+
+    uint64_t output_x = (raw_key & KEY_X_MASK) >> KEY_X_SHIFT;
+    uint64_t output_z = (raw_key & KEY_Z_MASK) >> KEY_Z_SHIFT;
+    uint64_t output_level = (raw_key & KEY_LEVEL_MASK) >> KEY_LEVEL_SHIFT;
+    uint64_t output_nz = (raw_key & KEY_EMPTY_MASK) >> KEY_EMPTY_SHIFT;
+
+    uint64_t short_nz = raw_key&1;
+
+    return raw_key;
+
+}
+
+bool decode_xzl(std::uint64_t raw_key,uint16_t& output_x,uint16_t& output_z,uint8_t& output_level){
+
+
+    output_x = (raw_key & KEY_X_MASK) >> KEY_X_SHIFT;
+    output_z = (raw_key & KEY_Z_MASK) >> KEY_Z_SHIFT;
+    output_level = (raw_key & KEY_LEVEL_MASK) >> KEY_LEVEL_SHIFT;
+
+
+    return raw_key&1;
+
+}
 
 
 
@@ -69,28 +117,12 @@ cmdLineOptions read_command_line_options(int argc, char **argv) {
 }
 
 
-void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,std::vector<float>& stencil, const int stencil_size, const int stencil_half);
+void create_test_particles_surya(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,std::vector<float>& stencil, const int stencil_size,
+                                 const int stencil_half);
 
 
-
-
-
-
-
-
-uint64_t encode_xzl(uint64_t x,uint64_t z,uint64 level){
-
-
-
-
-
-
-
-}
-
-
-
-
+__global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* _line_offsets,std::size_t*  _row_index_end,const std::size_t* _offsets,
+                                 std::size_t num_blocks,std::float_t parts_per_block,std::size_t total_number_rows);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -135,6 +167,10 @@ int main(int argc, char **argv) {
 
     uint64_t bundle_xzl=0;
 
+    APRTimer timer;
+    timer.verbose_flag = true;
+
+    timer.start_timer("initialize structure");
 
     for (int level = aprIt.level_min(); level <= aprIt.level_max(); ++level) {
         level_offset[level] = zx_counter;
@@ -143,12 +179,21 @@ int main(int argc, char **argv) {
             for (x = 0; x < aprIt.spatial_index_x_max(level); ++x) {
 
                 zx_counter++;
+                uint64_t key;
                 if (aprIt.set_new_lzx(level, z, x) < UINT64_MAX) {
-                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>(aprIt.global_index(),
+
+                     key = encode_xzl(x,z,level,1);
+                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>(key,
                                                                                                aprIt.particles_zx_end(level,z,x))); //This stores the begining and end global index for each level_xz_row
                 } else {
-                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>((std::size_t)pcounter,(std::size_t) pcounter)); //This stores the begining and end global index for each level_
+                     key = encode_xzl(x,z,level,0);
+                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>(key,(std::size_t) pcounter)); //This stores the begining and end global index for each level_
                 }
+
+//                uint16_t output_x;
+//                uint16_t output_z;
+//                uint8_t output_level;
+//                decode_xzl(key,output_x,output_z,output_level);
 
                 for (aprIt.set_new_lzx(level, z, x);
                      aprIt.global_index() < aprIt.particles_zx_end(level, z,
@@ -163,14 +208,19 @@ int main(int argc, char **argv) {
         }
     }
 
+    timer.stop_timer();
+
+
 
     ////////////////////
     ///
     /// Example of doing our level,z,x access using the GPU data structure
     ///
     /////////////////////
-    auto start = std::chrono::high_resolution_clock::now();
+    timer.start_timer("transfer structures to GPU");
 
+
+    uint64_t total_number_rows = level_zx_index_start.size();
 
     thrust::host_vector<thrust::tuple<std::size_t,std::size_t> > h_level_zx_index_start(level_zx_index_start.size());
     thrust::transform(level_zx_index_start.begin(), level_zx_index_start.end(),
@@ -182,41 +232,52 @@ int main(int argc, char **argv) {
     thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start = h_level_zx_index_start;
 
 
-    thrust::device_vector<std::float_t> d_stencil(stencil.begin(), stencil.end());		// device stencil
-    thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end());
-    thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end());
-    thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),0);
+    thrust::device_vector<std::uint16_t> d_y_explicit(y_explicit.begin(), y_explicit.end()); //y-coordinates
+    thrust::device_vector<std::uint16_t> d_particle_values(particle_values.begin(), particle_values.end()); //particle values
+    thrust::device_vector<std::uint16_t> d_test_access_data(d_particle_values.size(),0); // output data
 
-    thrust::device_vector<std::size_t> d_level_offset(level_offset.begin(),level_offset.end());
+    thrust::device_vector<std::size_t> d_level_offset(level_offset.begin(),level_offset.end()); //cumsum of number of rows in lower levels
 
+    /*
+     * Dynamic load balancing of the APR data-structure variables
+     *
+     */
 
-    std::size_t number_blocks = 8000;
-
-    thrust::device_vector<std::uint16_t> d_x_end(number_blocks,0);
-    std::uint16_t*   _x_end  =  thrust::raw_pointer_cast(d_x_end.data());
-
-    thrust::device_vector<std::size_t> d_ind_end(number_blocks,0);
-    std::size_t*   _ind_end  =  thrust::raw_pointer_cast(d_ind_end.data());
-
-    std::size_t max_elements = 0;
-
-    for (int level = aprIt.level_min(); level <= aprIt.level_max(); ++level) {
-        auto xtimesy = aprIt.spatial_index_y_max(level);// + (stencil_size - 1);
-        xtimesy *= aprIt.spatial_index_x_max(level);// + (stencil_size - 1);
-        if(max_elements < xtimesy)
-            max_elements = xtimesy;
-    }
-    thrust::device_vector<std::uint16_t> d_temp_vec(max_elements*stencil_size,0);
+    std::size_t max_number_chunks = 8000;
+    thrust::device_vector<std::size_t> d_ind_end(max_number_chunks,0);
+    std::size_t*   chunk_index_end  =  thrust::raw_pointer_cast(d_ind_end.data());
 
     const thrust::tuple<std::size_t,std::size_t>* levels =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
     const std::uint16_t*             y_ex   =  thrust::raw_pointer_cast(d_y_explicit.data());
     const std::uint16_t*             pdata  =  thrust::raw_pointer_cast(d_particle_values.data());
     const std::size_t*             offsets= thrust::raw_pointer_cast(d_level_offset.data());
-    std::uint16_t*                   tvec = thrust::raw_pointer_cast(d_temp_vec.data());
     std::uint16_t*                   expected = thrust::raw_pointer_cast(d_test_access_data.data());
-    const std::float_t*		     stencil_pointer =  thrust::raw_pointer_cast(d_stencil.data());		// stencil pointer
 
+    timer.stop_timer();
 
+    /*
+     * Dynamic load balancing of the APR data-structure variables
+     *
+     */
+
+    timer.start_timer("load balancing");
+
+    std::cout << "Total number of rows: " << total_number_rows << std::endl;
+
+    std::size_t total_number_particles = apr.total_number_particles();
+
+    //Figuring out how many particles per chunk are required
+    std::size_t max_particles_per_row = apr.orginal_dimensions(0); //maximum number of particles in a row
+    std::size_t parts_per_chunk = std::max((std::size_t)(max_particles_per_row+1),(std::size_t) floor(total_number_particles/max_number_chunks)); // to gurantee every chunk stradles across more then one row, the minimum particle chunk needs ot be larger then the largest possible number of particles in a row
+
+    std::size_t actual_number_chunks = total_number_particles/parts_per_chunk + 1; // actual number of chunks realized based on the constraints on the total number of particles and maximum row
+
+    dim3 threads(64);
+    dim3 blocks((total_number_rows + threads.x - 1)/threads.x);
+
+    load_balance_xzl<<<blocks,threads>>>(levels,chunk_index_end,offsets,actual_number_chunks,parts_per_chunk,total_number_rows);
+
+    timer.stop_timer();
 
     //////////////////////////
     ///
@@ -235,81 +296,86 @@ int main(int argc, char **argv) {
 
 
 
-    for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
-        //This step is required for all loops to set the iterator by the particle number
-        aprIt.set_iterator_to_particle_by_number(particle_number);
-
-
-        if(utest_data.data[particle_number]!=test_access_data[particle_number]){
-            success = false;
-
-                //if(aprIt.level() == 6) {
-//                    std::cout << particle_number << std::endl;
-//                std::cout << aprIt.x() << " " << aprIt.y() << " " << aprIt.z() << " " << aprIt.level() << " expected: "
-//                          << utest_data.data[particle_number] << ", received: " << test_access_data[particle_number]
-//                          << std::endl;
-            //}
-            //break;
-            c_fail++;
-        }
-
-        // std::cout << aprIt.x()<< " "  << aprIt.y()<< " "  << aprIt.z() << " "<< aprIt.level() << " expected: " << utest_data.data[particle_number] << ", received: " << test_access_data[particle_number] << "\n";
-
-    }
-
-
-    if(success){
-        std::cout << "PASS" << std::endl;
-    } else {
-        std::cout << "FAIL " << c_fail << std::endl;
-    }
-
 
 }
 
-__global__ void load_balance_xzl(const uint16_t level_,const thrust::tuple<std::size_t,std::size_t>* _line_offsets,std::uint16_t*  _xend,const std::size_t* _offsets,
-                                 std::size_t   _max_x,std::size_t num_blocks,std::float_t parts_per_block,std::size_t parts_begin){
+__global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* _line_offsets,std::size_t*  _row_index_end,const std::size_t* _offsets,
+                                 std::size_t num_blocks,std::float_t parts_per_block,std::size_t total_number_rows){
 
-    int x_index = blockDim.x * blockIdx.x + threadIdx.x;
-    int z_index = blockDim.y * blockIdx.y + threadIdx.y;
+    int row_index = blockDim.x * blockIdx.x + threadIdx.x;
 
-    if(x_index >= _max_x){
-        return; // out of bounds
+    if(row_index>=total_number_rows){
+        return;
     }
 
-    //printf("Hello from dim: %d block: %d, thread: %d  x index: %d z: %d \n",blockDim.x, blockIdx.x, threadIdx.x,x_index,(int) _z_index);
+    std::size_t key= thrust::get<0>(_line_offsets[row_index]);
 
-    auto level_zx_offset = _offsets[_level] + _max_x * _z_index + x_index;
+    if(!key&1){
+        return; //empty row
+    }
 
-    std::size_t parts_end = thrust::get<1>(_line_offsets[level_zx_offset]);
+    std::size_t index_end = thrust::get<1>(_line_offsets[row_index]);
+    std::size_t index_begin;
 
-    std::size_t index_begin =  floor((thrust::get<0>(_line_offsets[level_zx_offset])-parts_begin)/parts_per_block);
-
-    std::size_t index_end;
-
-    if(parts_end==parts_begin){
-        index_end=0;
+    if(row_index > 0){
+        index_begin = thrust::get<0>(_line_offsets[row_index]);
     } else {
-        index_end = floor((parts_end-parts_begin)/parts_per_block);
+        index_begin =0;
     }
 
-    //need to add the loop
-    if(index_begin!=index_end){
+    std::size_t chunk_start = floor(index_begin/parts_per_block);
+    std::size_t chunk_end =  floor(index_end/parts_per_block);
 
 
-        for (int i = (index_begin+1); i <= index_end; ++i) {
-            _xend[i]=x_index;
+    std::uint16_t x;
+    std::uint16_t z;
+    std::uint8_t level;
 
-        }
-    }
+    //decode the key
+    x = (key & KEY_X_MASK) >> KEY_X_SHIFT;
+    z = (key & KEY_Z_MASK) >> KEY_Z_SHIFT;
+    level = (key & KEY_LEVEL_MASK) >> KEY_LEVEL_SHIFT;
 
 
-    if(x_index==(_max_x-1)){
-        _ind_end[num_blocks-1] = parts_end;
-        _xend[num_blocks-1] = (_max_x-1);
 
-    }
-
+//    int z_index = blockDim.y * blockIdx.y + threadIdx.y;
+//
+//    if(x_index >= _max_x){
+//        return; // out of bounds
+//    }
+//
+//    //printf("Hello from dim: %d block: %d, thread: %d  x index: %d z: %d \n",blockDim.x, blockIdx.x, threadIdx.x,x_index,(int) _z_index);
+//
+//    auto level_zx_offset = _offsets[_level] + _max_x * _z_index + x_index;
+//
+//    std::size_t parts_end = thrust::get<1>(_line_offsets[level_zx_offset]);
+//
+//    std::size_t index_begin =  floor((thrust::get<0>(_line_offsets[level_zx_offset])-parts_begin)/parts_per_block);
+//
+//    std::size_t index_end;
+//
+//    if(parts_end==parts_begin){
+//        index_end=0;
+//    } else {
+//        index_end = floor((parts_end-parts_begin)/parts_per_block);
+//    }
+//
+//    //need to add the loop
+//    if(index_begin!=index_end){
+//
+//
+//        for (int i = (index_begin+1); i <= index_end; ++i) {
+//            _xend[i]=x_index;
+//
+//        }
+//    }
+//
+//
+//    if(x_index==(_max_x-1)){
+//        _ind_end[num_blocks-1] = parts_end;
+//        _xend[num_blocks-1] = (_max_x-1);
+//
+//    }
 
 
 }
