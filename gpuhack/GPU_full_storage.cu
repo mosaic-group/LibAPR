@@ -106,7 +106,7 @@ __global__ void copy_out(
 int main(int argc, char **argv) {
     // Read provided APR file
     cmdLineOptions options = read_command_line_options(argc, argv);
-    const int reps = 20;
+    const int reps = 40;
 
     std::string fileName = options.directory + options.input;
     APR<uint16_t> apr;

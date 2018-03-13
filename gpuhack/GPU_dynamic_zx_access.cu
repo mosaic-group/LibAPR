@@ -137,7 +137,7 @@ __global__ void test_dynamic_balance_XZYL(const thrust::tuple<std::size_t,std::s
 int main(int argc, char **argv) {
     // Read provided APR file
     cmdLineOptions options = read_command_line_options(argc, argv);
-    const int reps = 20;
+    const int reps = 100;
 
     std::string fileName = options.directory + options.input;
     APR<uint16_t> apr;
@@ -190,17 +190,13 @@ int main(int argc, char **argv) {
                 if (aprIt.set_new_lzx(level, z, x) < UINT64_MAX) {
 
                      key = encode_xzl(x,z,level,1);
-                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>(key,
-                                                                                               aprIt.particles_zx_end(level,z,x))); //This stores the begining and end global index for each level_xz_row
+                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>((std::size_t)key,
+                                                                                               (std::size_t)aprIt.particles_zx_end(level,z,x))); //This stores the begining and end global index for each level_xz_row
                 } else {
                      key = encode_xzl(x,z,level,0);
-                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>(key,(std::size_t) pcounter)); //This stores the begining and end global index for each level_
+                    level_zx_index_start.emplace_back(std::make_tuple<std::size_t,std::size_t>((std::size_t)key,(std::size_t) pcounter)); //This stores the begining and end global index for each level_
                 }
 
-//                uint16_t output_x;
-//                uint16_t output_z;
-//                uint8_t output_level;
-//                decode_xzl(key,output_x,output_z,output_level);
 
                 for (aprIt.set_new_lzx(level, z, x);
                      aprIt.global_index() < aprIt.particles_zx_end(level, z,
@@ -250,7 +246,7 @@ int main(int argc, char **argv) {
      *
      */
 
-    std::size_t max_number_chunks = 8000;
+    std::size_t max_number_chunks = 8191;
     thrust::device_vector<std::size_t> d_ind_end(max_number_chunks,0);
     std::size_t*   chunk_index_end  =  thrust::raw_pointer_cast(d_ind_end.data());
 
@@ -296,7 +292,7 @@ int main(int argc, char **argv) {
      */
 
 
-    int number_reps = 10;
+    int number_reps = 40;
 
 
     timer.start_timer("iterate over all particles");
@@ -341,14 +337,17 @@ int main(int argc, char **argv) {
 
 
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
+    for (int rep = 0; rep < number_reps; ++rep) {
 
+        test_dynamic_balance_XZYL << < blocks_dyn, threads_dyn >> >
+                                                   (row_info, chunk_index_end, actual_number_chunks, particle_y, spatial_info_test);
 
-    test_dynamic_balance_XZYL << < blocks_dyn, threads_dyn >> >
-                                               (row_info, chunk_index_end, actual_number_chunks, particle_y, spatial_info_test);
-
-    cudaDeviceSynchronize();
+        cudaDeviceSynchronize();
+    }
 
     timer.stop_timer();
+
+    float gpu_iterate_time_si = timer.timings.back();
 
     ExtraParticleData<uint16_t> spatial_data_host(apr);
     thrust::copy(d_spatial_info_test.begin(), d_spatial_info_test.end(), spatial_data_host.data.begin());
@@ -377,9 +376,9 @@ int main(int argc, char **argv) {
 
     float cpu_iterate_time = timer.timings.back();
 
-    std::cout << "SPEEDUP GPU vs. CPU iterate= " << cpu_iterate_time/gpu_iterate_time << std::endl;
 
-    timer.start_timer("Performance comparison on CPU OpenMP * NOT WOKRING"); //not working
+
+    timer.start_timer("Performance comparison on CPU access sum"); //not working
     for (int rep = 0; rep < number_reps; ++rep) {
 
 #pragma omp parallel for schedule(static) private(particle_number) firstprivate(aprIt)
@@ -387,12 +386,17 @@ int main(int argc, char **argv) {
             //This step is required for all loops to set the iterator by the particle number
             aprIt.set_iterator_to_particle_by_number(particle_number);
 
-            test_cpu[aprIt] += 1;
+            test_cpu[aprIt] = aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level();
 
         }
     }
 
     timer.stop_timer();
+
+    float cpu_iterate_time_si = timer.timings.back();
+
+    std::cout << "SPEEDUP GPU vs. CPU iterate= " << cpu_iterate_time/gpu_iterate_time << std::endl;
+    std::cout << "SPEEDUP GPU vs. CPU iterate (Spatial Info)= " << cpu_iterate_time_si/gpu_iterate_time_si << std::endl;
 
     //////////////////////////
     ///
