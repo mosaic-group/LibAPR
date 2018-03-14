@@ -213,7 +213,7 @@ void APRRaycaster::perform_raycast(APR<U>& apr,ExtraParticleData<S>& particle_da
             int dim2 = 0;
             getPos(dim1, dim2, x_actual, y_actual, z_actual, depth_slice[level].x_num, depth_slice[level].y_num);
 
-            if ((dim1 > 0) & (dim2 > 0) & (dim1 < (int64_t)depth_slice[level].y_num) & (dim2 < (int64_t)depth_slice[level].x_num)) {
+            if ((dim1 > 0) && (dim2 > 0) && (dim1 < (int64_t)depth_slice[level].y_num) && (dim2 < (int64_t)depth_slice[level].x_num)) {
                 //get the particle value
                 S temp_int = particle_data[apr_iterator];
 
@@ -236,7 +236,7 @@ void APRRaycaster::perform_raycast(APR<U>& apr,ExtraParticleData<S>& particle_da
 
         for (level = (level_min); level < apr.level_max(); level++) {
 
-            const unsigned int step_size = pow(2, apr.level_max() - level);
+            auto step_size = (const unsigned int)(pow(2, apr.level_max() - level));
 #ifdef HAVE_OPENMP
 	#pragma omp parallel for default(shared) private(x_,i,k) schedule(guided) if (level > 8)
 #endif
@@ -251,10 +251,10 @@ void APRRaycaster::perform_raycast(APR<U>& apr,ExtraParticleData<S>& particle_da
                     const unsigned int dim2 = x_ * step_size;
 
                     //add to all the required rays
-                    const unsigned int offset_max_dim1 = std::min((int) depth_slice[apr.level_max()].y_num,
-                                                         (int) (dim1 + step_size));
-                    const unsigned int offset_max_dim2 = std::min((int) depth_slice[apr.level_max()].x_num,
-                                                         (int) (dim2 + step_size));
+                    const unsigned int offset_max_dim1 = std::min((unsigned int) depth_slice[apr.level_max()].y_num,
+                                                         dim1 + step_size);
+                    const unsigned int offset_max_dim2 = std::min((unsigned int) depth_slice[apr.level_max()].x_num,
+                                                         dim2 + step_size);
 
                     if (curr_int > 0) {
 
@@ -292,6 +292,7 @@ void APRRaycaster::perform_raycast(APR<U>& apr,ExtraParticleData<S>& particle_da
 
 
 }
+#endif
 
 template<typename S,typename U>
 float APRRaycaster::perpsective_mesh_raycast(MeshData<S>& image,MeshData<U>& cast_views) {
@@ -390,5 +391,3 @@ float APRRaycaster::perpsective_mesh_raycast(MeshData<S>& image,MeshData<U>& cas
 
     return elapsed_seconds;
 }
-
-#endif
