@@ -63,6 +63,9 @@ struct GPUAccessPtrs{
     std::size_t total_number_chunks;
     const std::uint16_t* y_part_coord;
     std::size_t* level_offsets;
+    std::uint16_t* level_x_num;
+    std::uint16_t* level_z_num;
+    std::uint16_t* level_y_num;
 };
 
 class GPUAPRAccess {
@@ -85,6 +88,12 @@ public:
     thrust::device_vector<std::uint16_t> d_particle_values; //particle values
     thrust::device_vector<std::size_t> d_level_offset; //cumsum of number of rows in lower levels
     thrust::device_vector<std::size_t> d_chunk_index_end;
+
+    thrust::device_vector<std::uint16_t> d_x_num_level;
+    thrust::device_vector<std::uint16_t> d_y_num_level;
+    thrust::device_vector<std::uint16_t> d_z_num_level;
+
+
 
     std::size_t max_number_chunks = 8191;
     std::size_t actual_number_chunks;
@@ -205,6 +214,33 @@ public:
         cudaDeviceSynchronize();
 
         timer.stop_timer();
+
+
+        std::vector<uint16_t> x_num_level;
+        std::vector<uint16_t> z_num_level;
+        std::vector<uint16_t> y_num_level;
+        x_num_level.resize(apr.level_max()+1);
+        z_num_level.resize(apr.level_max()+1);
+        y_num_level.resize(apr.level_max()+1);
+
+        d_x_num_level.resize(apr.level_max()+1);
+        d_z_num_level.resize(apr.level_max()+1);
+        d_y_num_level.resize(apr.level_max()+1);
+
+        for (int i = apr.level_min(); i <= apr.level_max(); ++i) {
+            x_num_level[i] = apr.spatial_index_x_max(i);
+            y_num_level[i] = apr.spatial_index_y_max(i);
+            z_num_level[i] = apr.spatial_index_z_max(i);
+        }
+
+        thrust::copy(x_num_level.begin(),x_num_level.end(),d_x_num_level.data());
+        thrust::copy(y_num_level.begin(),y_num_level.end(),d_y_num_level.data());
+        thrust::copy(z_num_level.begin(),z_num_level.end(),d_z_num_level.data());
+
+        gpu_access.level_x_num = thrust::raw_pointer_cast(d_x_num_level.data());
+        gpu_access.level_y_num = thrust::raw_pointer_cast(d_y_num_level.data());
+        gpu_access.level_z_num = thrust::raw_pointer_cast(d_z_num_level.data());
+
 
         //set up gpu pointers
         row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());

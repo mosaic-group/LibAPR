@@ -69,7 +69,7 @@ cmdLineOptions read_command_line_options(int argc, char **argv) {
 
 
 __global__ void update_dense_patch(const thrust::tuple<std::size_t,std::size_t>* row_info,const std::size_t*  _chunk_index_end,
-                                   std::size_t total_number_chunks,const std::uint16_t* particle_y,const std::uint16_t* particles_input,std::uint16_t* particles_output);
+                                   std::size_t total_number_chunks,const std::uint16_t* particle_y,const std::size_t* level_offsets,const std::uint16_t* level_y_num,const std::uint16_t* level_x_num,const std::uint16_t* level_z_num, std::uint16_t* particles_input,std::uint16_t* particles_output);
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -116,7 +116,17 @@ int main(int argc, char **argv) {
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
 
-        update_dense_patch <<< blocks_dyn, threads_dyn >>> (gpuaprAccess.gpu_access.row_info,gpuaprAccess.gpu_access._chunk_index_end,gpuaprAccess.actual_number_chunks,gpuaprAccess.gpu_access.y_part_coord,apr.particles_intensities.gpu_pointer,dense_patch_output.gpu_pointer);
+        update_dense_patch <<< blocks_dyn, threads_dyn >>> (
+                                                               gpuaprAccess.gpu_access.row_info,
+                                                               gpuaprAccess.gpu_access._chunk_index_end,
+                                                               gpuaprAccess.actual_number_chunks,
+                                                               gpuaprAccess.gpu_access.y_part_coord,
+                                                               gpuaprAccess.gpu_access.level_offsets,
+                                                               gpuaprAccess.gpu_access.level_y_num,
+                                                               gpuaprAccess.gpu_access.level_x_num,
+                                                               gpuaprAccess.gpu_access.level_z_num,
+                                                               apr.particles_intensities.gpu_pointer,
+                                                               dense_patch_output.gpu_pointer);
 
         cudaDeviceSynchronize();
     }
@@ -133,10 +143,33 @@ int main(int argc, char **argv) {
 }
 
 
+__device__ std::size_t compute_index(
+        const std::uint16_t _x,
+        const std::uint16_t _z,
+        const std::uint8_t _level,
+        const std::size_t* level_offsets,
+        const std::uint16_t* level_y_num,
+        const std::uint16_t* level_x_num,
+        const std::uint16_t* level_z_num
+){
+    std::size_t level_zx_offset = level_offsets[_level] + level_x_num[_level] * _z + _x;
 
+    return level_zx_offset;
 
-__global__ void update_dense_patch(const thrust::tuple<std::size_t,std::size_t>* row_info,const std::size_t*  _chunk_index_end,
-                                          std::size_t total_number_chunks,const std::uint16_t* particle_y,const std::uint16_t* particles_input,std::uint16_t* particles_output){
+}
+
+__global__ void update_dense_patch(
+        const thrust::tuple<std::size_t,std::size_t>* row_info,
+        const std::size_t*  _chunk_index_end,
+        std::size_t total_number_chunks,
+        const std::uint16_t* particle_y,
+        const std::size_t* level_offsets,
+        const std::uint16_t* level_y_num,
+        const std::uint16_t* level_x_num,
+        const std::uint16_t* level_z_num,
+        std::uint16_t* particles_input,
+        std::uint16_t* particles_output)
+{
 
 
     int chunk_index = blockDim.x * blockIdx.x + threadIdx.x; // the input to each kernel is its chunk index for which it should iterate over
@@ -145,9 +178,11 @@ __global__ void update_dense_patch(const thrust::tuple<std::size_t,std::size_t>*
         return; //out of bounds
     }
 
-//    std::uint16_t local_patch[3][3][3];
-//
-//    std::uint16_t local_y[3][3];
+    std::uint16_t local_patch[3][3][3];
+
+    std::uint16_t local_y[3][3];
+    std::size_t global_begin[3][3];
+    std::size_t global_end[3][3];
 
     //load in the begin and end row indexs
     std::size_t row_begin;
@@ -191,9 +226,8 @@ __global__ void update_dense_patch(const thrust::tuple<std::size_t,std::size_t>*
             for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
                 uint16_t current_y = particle_y[particle_global_index];
 
-                //local_patch[1][1][1] = particles_input[particle_global_index] + current_y;
+                local_patch[1][1][current_y%3] = particles_input[particle_global_index];
 
-                uint16_t test = particles_output[particle_global_index];
                 particles_output[particle_global_index] = 0;
 
             }
