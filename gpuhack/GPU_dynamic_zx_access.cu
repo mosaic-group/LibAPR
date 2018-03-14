@@ -120,7 +120,7 @@ int main(int argc, char **argv) {
 
     for (int rep = 0; rep < number_reps; ++rep) {
 
-        test_dynamic_balance <<< blocks_dyn, threads_dyn >>> (gpuaprAccess.row_info,gpuaprAccess._chunk_index_end,gpuaprAccess.actual_number_chunks,gpuaprAccess.y_part_coord,iteration_check_particles.gpu_pointer);
+        test_dynamic_balance <<< blocks_dyn, threads_dyn >>> (gpuaprAccess.gpu_access.row_info,gpuaprAccess.gpu_access._chunk_index_end,gpuaprAccess.actual_number_chunks,gpuaprAccess.gpu_access.y_part_coord,iteration_check_particles.gpu_pointer);
 
         cudaDeviceSynchronize();
     }
@@ -151,7 +151,7 @@ int main(int argc, char **argv) {
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
 
-        test_dynamic_balance_XZYL <<< blocks_dyn, threads_dyn >>> (gpuaprAccess.row_info,gpuaprAccess._chunk_index_end,gpuaprAccess.actual_number_chunks,gpuaprAccess.y_part_coord,spatial_info_test.gpu_pointer);
+        test_dynamic_balance_XZYL <<< blocks_dyn, threads_dyn >>> (gpuaprAccess.gpu_access.row_info,gpuaprAccess.gpu_access._chunk_index_end,gpuaprAccess.actual_number_chunks,gpuaprAccess.gpu_access.y_part_coord,spatial_info_test.gpu_pointer);
 
         cudaDeviceSynchronize();
     }

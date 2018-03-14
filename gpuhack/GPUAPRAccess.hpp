@@ -57,16 +57,22 @@ __global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* r
 
 
 }
-
+struct GPUAccessPtrs{
+    const thrust::tuple<std::size_t,std::size_t>* row_info;
+    std::size_t*  _chunk_index_end;
+    std::size_t total_number_chunks;
+    const std::uint16_t* y_part_coord;
+    std::size_t* level_offsets;
+};
 
 class GPUAPRAccess {
 
 public:
 
-    thrust::tuple<std::size_t,std::size_t>* row_info;
+    const thrust::tuple<std::size_t,std::size_t>* row_info;
     std::size_t*  _chunk_index_end;
     std::size_t total_number_chunks;
-    std::uint16_t* y_part_coord;
+    const std::uint16_t* y_part_coord;
     std::size_t* level_offsets;
 
 
@@ -212,6 +218,7 @@ public:
         gpu_access._chunk_index_end = thrust::raw_pointer_cast(d_chunk_index_end.data());
         gpu_access.total_number_chunks = actual_number_chunks;
         gpu_access.y_part_coord = thrust::raw_pointer_cast(d_y_part_coord.data());
+        gpu_access.level_offsets = thrust::raw_pointer_cast(d_level_offset.data());
 
         //transfer data across
         cudaMalloc((void**)&gpu_access_ptr, sizeof(GPUAccessPtrs));

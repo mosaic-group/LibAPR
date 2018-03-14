@@ -108,13 +108,15 @@ int main(int argc, char **argv) {
     */
 
     ExtraParticleData<uint16_t> dense_patch_output(apr);
+    dense_patch_output.copy_data_to_gpu();
 
     apr.particles_intensities.copy_data_to_gpu();
+
 
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
 
-        update_dense_patch <<< blocks_dyn, threads_dyn >>> (gpuaprAccess.row_info,gpuaprAccess._chunk_index_end,gpuaprAccess.actual_number_chunks,gpuaprAccess.y_part_coord,apr.particles_intensities.gpu_pointer,dense_patch_output.gpu_pointer);
+        update_dense_patch <<< blocks_dyn, threads_dyn >>> (gpuaprAccess.gpu_access.row_info,gpuaprAccess.gpu_access._chunk_index_end,gpuaprAccess.actual_number_chunks,gpuaprAccess.gpu_access.y_part_coord,apr.particles_intensities.gpu_pointer,dense_patch_output.gpu_pointer);
 
         cudaDeviceSynchronize();
     }
@@ -124,6 +126,8 @@ int main(int argc, char **argv) {
     float gpu_iterate_time_si = timer.timings.back();
     //copy data back from gpu
     dense_patch_output.copy_data_to_host();
+
+    std::cout << dense_patch_output.data[0] << std::endl;
 
 
 }
@@ -141,9 +145,9 @@ __global__ void update_dense_patch(const thrust::tuple<std::size_t,std::size_t>*
         return; //out of bounds
     }
 
-    std::uint16_t local_patch[3][3][3];
-
-    std::uint16_t local_y[3][3];
+//    std::uint16_t local_patch[3][3][3];
+//
+//    std::uint16_t local_y[3][3];
 
     //load in the begin and end row indexs
     std::size_t row_begin;
