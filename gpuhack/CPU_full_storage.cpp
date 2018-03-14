@@ -115,10 +115,10 @@ int main(int argc, char **argv) {
 
                 zx_counter++;
                 if (aprIt.set_new_lzx(level, z, x) < UINT64_MAX) {
-                    level_zx_index_start.emplace_back(std::array<uint64_t,2>{aprIt.global_index(),
-                                aprIt.particles_zx_end(level,z,x)-1}); //This stores the begining and end global index for each level_xz_row
+                    level_zx_index_start.emplace_back(std::array<std::size_t,2>{(std::size_t)aprIt.global_index(),
+                                                                             (std::size_t)aprIt.particles_zx_end(level,z,x)-1}); //This stores the begining and end global index for each level_xz_row
                 } else {
-                    level_zx_index_start.emplace_back(std::array<uint64_t,2>{UINT64_MAX, 0}); //This stores the begining and end global index for each level_
+                    level_zx_index_start.emplace_back(std::array<std::size_t,2>{UINT64_MAX,(std::size_t) 0}); //This stores the begining and end global index for each level_
                 }
 
                 for (aprIt.set_new_lzx(level, z, x);

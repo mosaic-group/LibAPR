@@ -59,7 +59,6 @@ public:
     }
 
 
-
 #endif
 
     std::vector<DataType> data;
