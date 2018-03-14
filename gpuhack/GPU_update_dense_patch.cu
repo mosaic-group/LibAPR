@@ -108,8 +108,6 @@ int main(int argc, char **argv) {
     */
 
     ExtraParticleData<uint16_t> dense_patch_output(apr);
-    dense_patch_output.init_gpu(apr.total_number_particles());
-
 
     apr.particles_intensities.copy_data_to_gpu();
 
@@ -125,7 +123,7 @@ int main(int argc, char **argv) {
 
     float gpu_iterate_time_si = timer.timings.back();
     //copy data back from gpu
-    //dense_patch_output.copy_data_to_host();
+    dense_patch_output.copy_data_to_host();
 
 
 }
@@ -189,10 +187,10 @@ __global__ void update_dense_patch(const thrust::tuple<std::size_t,std::size_t>*
             for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
                 uint16_t current_y = particle_y[particle_global_index];
 
+                //local_patch[1][1][1] = particles_input[particle_global_index] + current_y;
 
-                local_patch[1][1][1] = particles_input[particle_global_index] + current_y;
-
-                particles_output[particle_global_index]=current_y+x+z+level;
+                uint16_t test = particles_output[particle_global_index];
+                particles_output[particle_global_index] = 0;
 
             }
 
