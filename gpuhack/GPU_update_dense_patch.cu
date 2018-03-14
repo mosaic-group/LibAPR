@@ -95,7 +95,7 @@ int main(int argc, char **argv) {
 
     GPUAPRAccess gpuaprAccess(apr);
 
-    int number_reps = 1;
+    int number_reps = 10;
 
     timer.start_timer("iterate over all particles");
 
@@ -137,13 +137,50 @@ int main(int argc, char **argv) {
     //copy data back from gpu
     dense_patch_output.copy_data_to_host();
 
-    std::cout << dense_patch_output.data[0] << std::endl;
+    std::cout << gpu_iterate_time_si/(number_reps*1.0f) << std::endl;
+
+    //////////////////////////
+    ///
+    /// Now check the data
+    ///
+    ////////////////////////////
+
+
+    bool success = true;
+
+    uint64_t c_fail= 0;
+    uint64_t c_pass= 0;
+
+    for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+        //This step is required for all loops to set the iterator by the particle number
+        aprIt.set_iterator_to_particle_by_number(particle_number);
+        if(dense_patch_output[aprIt]==apr.particles_intensities[aprIt]){
+            c_pass++;
+        } else {
+            c_fail++;
+            success = false;
+            if(c_fail < 20) {
+                std::cout << dense_patch_output[aprIt] << " Expected: " <<  apr.particles_intensities[aprIt] << " Level: " << aprIt.level() << std::endl;
+            }
+        }
+    }
+
+    if(success){
+        std::cout << "Fill Dense Check, PASS" << std::endl;
+    } else {
+        std::cout << "Fill Dense Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
+    }
+
+
+
+
+
 
 
 }
 
 
-__device__ std::size_t compute_index(
+__device__ std::size_t compute_row_index(
         const std::uint16_t _x,
         const std::uint16_t _z,
         const std::uint8_t _level,
@@ -155,6 +192,7 @@ __device__ std::size_t compute_index(
     std::size_t level_zx_offset = level_offsets[_level] + level_x_num[_level] * _z + _x;
 
     return level_zx_offset;
+
 
 }
 
@@ -180,9 +218,9 @@ __global__ void update_dense_patch(
 
     std::uint16_t local_patch[3][3][3];
 
-    std::uint16_t local_y[3][3];
-    std::size_t global_begin[3][3];
     std::size_t global_end[3][3];
+    std::size_t global_index[3][3];
+
 
     //load in the begin and end row indexs
     std::size_t row_begin;
@@ -205,13 +243,6 @@ __global__ void update_dense_patch(
         current_row_key = thrust::get<0>(row_info[current_row]);
         if(current_row_key&1) { //checks if there any particles in the row
 
-            particle_global_index_end = thrust::get<1>(row_info[current_row]);
-
-            if (current_row == 0) {
-                particle_global_index_begin = 0;
-            } else {
-                particle_global_index_begin = thrust::get<1>(row_info[current_row-1]);
-            }
 
             std::uint16_t x;
             std::uint16_t z;
@@ -222,13 +253,65 @@ __global__ void update_dense_patch(
             z = (current_row_key & KEY_Z_MASK) >> KEY_Z_SHIFT;
             level = (current_row_key & KEY_LEVEL_MASK) >> KEY_LEVEL_SHIFT;
 
+            /*
+             * Need to initiazlie the update structures
+             */
+
+            for (int z_d = -1; z_d < 2; ++z_d) {
+                for (int x_d = -1; x_d < 2; ++x_d) {
+
+                    if(((x+x_d) >=0) && ((x+x_d) < level_x_num[level])){
+                        if(((z+z_d) >=0) && (z+z_d< level_z_num[level])) {
+
+                            std::size_t row_index = compute_row_index(x+x_d,z+z_d,level,level_offsets,level_y_num,level_x_num,level_z_num);
+                            global_end[z_d+1][x_d+1] = thrust::get<1>(row_info[row_index]);
+                            if(row_index>0) {
+                                global_index[z_d + 1][x_d + 1] = thrust::get<1>(row_info[row_index]);
+                            } else {
+                                global_index[z_d + 1][x_d + 1]=0;
+                            }
+
+
+                        } else {
+                            //this is out of bounds, section --> would need to be updated to handle boundary conditions
+                            global_end[z_d+1][x_d+1]=0;
+                            global_index[z_d+1][x_d+1]=1;
+                        }
+                    }
+
+                }
+            }
+
+
+            //Particle Row Loop
+            particle_global_index_end = thrust::get<1>(row_info[current_row]);
+
+            if (current_row == 0) {
+                particle_global_index_begin = 0;
+            } else {
+                particle_global_index_begin = thrust::get<1>(row_info[current_row-1]);
+            }
+
+
             //loop over the particles in the row
             for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
                 uint16_t current_y = particle_y[particle_global_index];
 
-                local_patch[1][1][current_y%3] = particles_input[particle_global_index];
+                //update patch
+                for (int z_d = 0; z_d < 3; ++z_d) {
+                    for (int x_d = 0; x_d < 3; ++x_d) {
 
-                particles_output[particle_global_index] = 0;
+                        //iterates over and updates the local patch
+                        while((global_index[z_d][x_d]+1) < (global_end[z_d+1][x_d+1]) && (particle_y[global_index[z_d][x_d]+1] < current_y)){
+                            global_index[z_d][x_d]++;
+                            local_patch[z_d][x_d][particle_y[global_index[z_d][x_d]]%3] = particles_input[global_index[z_d][x_d]];
+                        }
+
+                    }
+                }
+
+                //particles_output[particle_global_index] = local_patch[1][1][current_y%3];
+                particles_output[particle_global_index] = particles_input[particle_global_index];
 
             }
 
