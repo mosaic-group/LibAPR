@@ -5,8 +5,6 @@
 #ifndef PARTPLAY_EXTRAPARTICLEDATA_HPP
 #define PARTPLAY_EXTRAPARTICLEDATA_HPP
 
-#define APR_USE_CUDA
-
 #ifdef APR_USE_CUDA
 #include "thrust/device_vector.h"
 #include "thrust/tuple.h"
