@@ -159,8 +159,8 @@ int main(int argc, char **argv) {
         } else {
             c_fail++;
             success = false;
-            if(c_fail < 20) {
-                std::cout << dense_patch_output[aprIt] << " Expected: " <<  apr.particles_intensities[aprIt] << " Level: " << aprIt.level() << std::endl;
+            if(c_fail < 5) {
+                std::cout << dense_patch_output[aprIt] << " Expected: " <<  apr.particles_intensities[aprIt] << " Level: " << aprIt.level() << " y: " << aprIt.y() <<std::endl;
             }
         }
     }
@@ -216,10 +216,10 @@ __global__ void update_dense_patch(
         return; //out of bounds
     }
 
-    std::uint16_t local_patch[3][3][3];
+    std::uint16_t local_patch[3][3][3] ={0};
 
-    std::size_t global_end[3][3];
-    std::size_t global_index[3][3];
+    std::size_t global_end[3][3]={0};
+    std::size_t global_index[3][3]={0};
 
 
     //load in the begin and end row indexs
@@ -292,23 +292,39 @@ __global__ void update_dense_patch(
                 particle_global_index_begin = thrust::get<1>(row_info[current_row-1]);
             }
 
+            //initialize first value
+            for (int z_d = 0; z_d < 3; ++z_d) {
+                for (int x_d = 0; x_d < 3; ++x_d) {
+                    local_patch[z_d][x_d][particle_y[global_index[z_d][x_d]]%3] = particles_input[global_index[z_d][x_d]];
+                }
+            }
+
 
             //loop over the particles in the row
             for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
                 uint16_t current_y = particle_y[particle_global_index];
 
                 //update patch
-                for (int z_d = 0; z_d < 3; ++z_d) {
-                    for (int x_d = 0; x_d < 3; ++x_d) {
+//                for (int z_d = 0; z_d < 3; ++z_d) {
+//                    for (int x_d = 0; x_d < 3; ++x_d) {
+//
+//                        //iterates over and updates the local patch
+////                        while((global_index[z_d][x_d]+1) < (global_end[z_d+1][x_d+1]) && (particle_y[global_index[z_d][x_d]+1] < current_y)){
+////                            global_index[z_d][x_d]++;
+////                          //  local_patch[z_d][x_d][particle_y[global_index[z_d][x_d]]%3] = particles_input[global_index[z_d][x_d]];
+////                        }
+//                        //local_patch[z_d][x_d][current_y%3] = particles_input[global_index[z_d][x_d]];
+//                        //local_patch[1][1][1] = particles_input[particle_global_index];
+//                    }
+//                }
 
-                        //iterates over and updates the local patch
-                        while((global_index[z_d][x_d]+1) < (global_end[z_d+1][x_d+1]) && (particle_y[global_index[z_d][x_d]+1] < current_y)){
-                            global_index[z_d][x_d]++;
-                            local_patch[z_d][x_d][particle_y[global_index[z_d][x_d]]%3] = particles_input[global_index[z_d][x_d]];
-                        }
+                //local_patch[1][1][current_y%3] = particles_input[particle_global_index];
 
-                    }
+                while((global_index[1][1]+1) < (global_end[1][1]) && (particle_y[global_index[1][1]+1] <= (current_y+1))){
+                    global_index[1][1]++;
+                    local_patch[1][1][particle_y[global_index[1][1]]%3] = particles_input[global_index[1][1]];
                 }
+
 
                 particles_output[particle_global_index] = local_patch[1][1][current_y%3];
                 //particles_output[particle_global_index] = particles_input[particle_global_index];
