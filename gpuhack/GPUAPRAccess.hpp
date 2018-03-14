@@ -70,8 +70,8 @@ public:
     std::size_t* level_offsets;
 
 
-//    GPUAccessPtrs gpu_access;
-//    GPUAccessPtrs* gpu_access_ptr;
+    GPUAccessPtrs gpu_access;
+    GPUAccessPtrs* gpu_access_ptr;
 
     //device access data
     thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start;
@@ -207,9 +207,15 @@ public:
         y_part_coord = thrust::raw_pointer_cast(d_y_part_coord.data());
         level_offsets = thrust::raw_pointer_cast(d_level_offset.data());
 
-//        //transfer data across
-//        cudaMalloc((void**)&gpu_access_ptr, sizeof(GPUAccessPtrs));
-//        cudaMemcpy(gpu_access_ptr, &gpu_access, sizeof(GPUAccessPtrs), cudaMemcpyHostToDevice);
+        //set up gpu pointers
+        gpu_access.row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
+        gpu_access._chunk_index_end = thrust::raw_pointer_cast(d_chunk_index_end.data());
+        gpu_access.total_number_chunks = actual_number_chunks;
+        gpu_access.y_part_coord = thrust::raw_pointer_cast(d_y_part_coord.data());
+
+        //transfer data across
+        cudaMalloc((void**)&gpu_access_ptr, sizeof(GPUAccessPtrs));
+        cudaMemcpy(gpu_access_ptr, &gpu_access, sizeof(GPUAccessPtrs), cudaMemcpyHostToDevice);
 
     }
 
