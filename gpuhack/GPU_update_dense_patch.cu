@@ -266,7 +266,7 @@ __global__ void update_dense_patch(
                             std::size_t row_index = compute_row_index(x+x_d,z+z_d,level,level_offsets,level_y_num,level_x_num,level_z_num);
                             global_end[z_d+1][x_d+1] = thrust::get<1>(row_info[row_index]);
                             if(row_index>0) {
-                                global_index[z_d + 1][x_d + 1] = thrust::get<1>(row_info[row_index]);
+                                global_index[z_d + 1][x_d + 1] = thrust::get<1>(row_info[row_index-1]);
                             } else {
                                 global_index[z_d + 1][x_d + 1]=0;
                             }
@@ -310,8 +310,8 @@ __global__ void update_dense_patch(
                     }
                 }
 
-                //particles_output[particle_global_index] = local_patch[1][1][current_y%3];
-                particles_output[particle_global_index] = particles_input[particle_global_index];
+                particles_output[particle_global_index] = local_patch[1][1][current_y%3];
+                //particles_output[particle_global_index] = particles_input[particle_global_index];
 
             }
 
