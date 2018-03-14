@@ -43,7 +43,7 @@ public:
 
     void copy_data_to_gpu(){
         //copy info to device
-        if(gpu_data.size!=data.size()){
+        if(gpu_data.size() != data.size()){
             gpu_data.resize(data.size());
         }
 
