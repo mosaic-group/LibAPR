@@ -288,7 +288,7 @@ __global__ void update_dense_insert(
                             for (std::size_t particle_global_index = global_begin; particle_global_index < global_end; ++particle_global_index) {
                                 uint16_t current_y = particle_y[particle_global_index];
 
-                                local_row[current_y]+=(1.0/10.0f)*particles_input[particle_global_index];
+                                local_row[current_y]+=particles_input[particle_global_index];
 
                             }
 
@@ -315,11 +315,6 @@ __global__ void update_dense_insert(
             //loop over the particles in the row
             for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
                 uint16_t current_y = particle_y[particle_global_index];
-
-
-                //local_patch[1][1][current_y%3] = particles_input[particle_global_index];
-
-                float local_sum = 0;
 
 
                 particles_output[particle_global_index] = local_row[current_y];
