@@ -40,4 +40,5 @@ buildGPUTarget(GPU_raycast)
 buildGPUTarget(GPU_insert_dense_conv)
 buildGPUTarget(GPU_insert_dense_conv_dyn)
 buildGPUTarget(GPU_dynamic_zx_access)
+buildGPUTarget(GPU_update_dense_patch)
 

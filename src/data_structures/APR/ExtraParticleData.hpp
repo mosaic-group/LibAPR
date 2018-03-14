@@ -37,7 +37,7 @@ public:
     DataType* gpu_pointer;
 
     void init_gpu(std::size_t number_particles){
-        gpu_data.resize(number_particles);
+        gpu_data.resize(number_particles,0);
         gpu_pointer = thrust::raw_pointer_cast(gpu_data.data());
     }
 

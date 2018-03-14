@@ -58,19 +58,20 @@ __global__ void load_balance_xzl(const thrust::tuple<std::size_t,std::size_t>* r
 
 }
 
-struct GPUAccessPtrs{
-    const thrust::tuple<std::size_t,std::size_t>* row_info;
-    std::size_t*  _chunk_index_end;
-    std::size_t total_number_chunks;
-    const std::uint16_t* y_part_coord;
-};
 
 class GPUAPRAccess {
 
 public:
 
-    GPUAccessPtrs gpu_access;
-    GPUAccessPtrs* gpu_access_ptr;
+    thrust::tuple<std::size_t,std::size_t>* row_info;
+    std::size_t*  _chunk_index_end;
+    std::size_t total_number_chunks;
+    std::uint16_t* y_part_coord;
+    std::size_t* level_offsets;
+
+
+//    GPUAccessPtrs gpu_access;
+//    GPUAccessPtrs* gpu_access_ptr;
 
     //device access data
     thrust::device_vector<thrust::tuple<std::size_t,std::size_t> > d_level_zx_index_start;
@@ -102,7 +103,7 @@ public:
         y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
         std::vector<std::uint16_t> particle_values;
         particle_values.reserve(aprIt.total_number_particles());//size = number of particles
-        std::vector<std::size_t> level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
+        std::vector<std::size_t> h_level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
 
         std::size_t x = 0;
         std::size_t z = 0;
@@ -120,7 +121,7 @@ public:
         timer.start_timer("initialize structure");
 
         for (int level = aprIt.level_min(); level <= aprIt.level_max(); ++level) {
-            level_offset[level] = zx_counter;
+            h_level_offset[level] = zx_counter;
 
             for (z = 0; z < aprIt.spatial_index_z_max(level); ++z) {
                 for (x = 0; x < aprIt.spatial_index_x_max(level); ++x) {
@@ -167,7 +168,7 @@ public:
         d_y_part_coord.resize(apr.total_number_particles());
         thrust::copy(y_explicit.begin(), y_explicit.end(),d_y_part_coord.data()); //y-coordinates
         d_level_offset.resize(aprIt.level_max()+1);
-        thrust::copy(level_offset.begin(),level_offset.end(),d_level_offset.data()); //cumsum of number of rows in lower levels
+        thrust::copy(h_level_offset.begin(),h_level_offset.end(),d_level_offset.data()); //cumsum of number of rows in lower levels
 
         d_chunk_index_end.resize(max_number_chunks);
 
@@ -175,7 +176,7 @@ public:
 
         const thrust::tuple<std::size_t,std::size_t>* row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
         const std::uint16_t*             particle_y   =  thrust::raw_pointer_cast(d_y_part_coord.data());
-        const std::size_t*             offsets= thrust::raw_pointer_cast(d_level_offset.data());
+        const std::size_t*             offsets= thrust::raw_pointer_cast(h_level_offset.data());
 
         timer.start_timer("load balancing");
 
@@ -200,14 +201,15 @@ public:
         timer.stop_timer();
 
         //set up gpu pointers
-        gpu_access.row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
-        gpu_access._chunk_index_end = thrust::raw_pointer_cast(d_chunk_index_end.data());
-        gpu_access.total_number_chunks = actual_number_chunks;
-        gpu_access.y_part_coord = thrust::raw_pointer_cast(d_y_part_coord.data());
+        row_info =  thrust::raw_pointer_cast(d_level_zx_index_start.data());
+        _chunk_index_end = thrust::raw_pointer_cast(d_chunk_index_end.data());
+        total_number_chunks = actual_number_chunks;
+        y_part_coord = thrust::raw_pointer_cast(d_y_part_coord.data());
+        level_offsets = thrust::raw_pointer_cast(d_level_offset.data());
 
-        //transfer data across
-        cudaMalloc((void**)&gpu_access_ptr, sizeof(GPUAccessPtrs));
-        cudaMemcpy(gpu_access_ptr, &gpu_access, sizeof(GPUAccessPtrs), cudaMemcpyHostToDevice);
+//        //transfer data across
+//        cudaMalloc((void**)&gpu_access_ptr, sizeof(GPUAccessPtrs));
+//        cudaMemcpy(gpu_access_ptr, &gpu_access, sizeof(GPUAccessPtrs), cudaMemcpyHostToDevice);
 
     }
 

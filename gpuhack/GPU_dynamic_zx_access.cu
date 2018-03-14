@@ -24,10 +24,6 @@
 
 #include "GPUAPRAccess.hpp"
 
-
-
-
-
 struct cmdLineOptions{
     std::string output = "output";
     std::string stats = "";
