@@ -124,7 +124,7 @@ if(APR_USE_CUDA)
     set(CUDA_TARGET cudaLib)
     set(CUDA_APR_TARGET cudaAprLib)
     CUDA_SELECT_NVCC_ARCH_FLAGS(ARCH_FLAGS Auto)
-    #list(APPEND CUDA_NVCC_FLAGS "-O0; -Xcompiler -fPIC")#"-std=c++14;-O0; -Xcompiler -fPIC")
+    list(APPEND CUDA_NVCC_FLAGS "-std=c++14")
     list(APPEND CUDA_NVCC_FLAGS ${ARCH_FLAGS})
 
     set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -use_fast_math")
