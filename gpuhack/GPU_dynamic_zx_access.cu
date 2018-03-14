@@ -21,7 +21,6 @@
 #include "thrust/copy.h"
 #include "../src/misc/APRTimer.hpp"
 #include "../src/data_structures/APR/ExtraParticleData.hpp"
-#include "../../../../../Developer/NVIDIA/CUDA-9.1/include/thrust/tuple.h"
 
 #include "GPUAPRAccess.hpp"
 
