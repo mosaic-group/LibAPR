@@ -646,12 +646,12 @@ int main(int argc, char **argv) {
                         dim3 threads_load(threads_d);
                         dim3 blocks_load(chunk);
 
-//                        std::cout << parts_per_block << std::endl;
+                        //std::cout << parts_per_block << std::endl;
 //                        std::cout << parts_begin << std::endl;
 //                        std::cout << num_parts << std::endl;
 
 
-                        load_balance << < blocks, threads >> >
+                        load_balance <<< blocks, threads >>>
                                                   (lvl, z, levels, _x_end, _ind_end, offsets, x_num, num_blocks+1, parts_per_block, parts_begin);
                         cudaDeviceSynchronize();
 
@@ -661,7 +661,7 @@ int main(int argc, char **argv) {
                                  //                      (lvl, z, levels, _x_end, _ind_end, offsets, x_num, expected, num_blocks+1);
 
 
-                        insert_dynamic << < blocks_load, threads_load >> > (lvl,
+                        insert_dynamic <<< blocks_load, threads_load >>> (lvl,
                                 z,
                                 levels,
                                 y_ex,
@@ -701,16 +701,16 @@ int main(int argc, char **argv) {
 //                            expected,
 //                            stencil_size, stencil_half, stencil_pointer);
 
-//                        push_back_dynamic << < blocks_load, threads_load >> > (lvl,
-//                                z,
-//                                levels,
-//                                y_ex,
-//                                tvec,
-//                                offsets,
-//                                y_num, x_num, z_num,
-//                                particle_values.size(),
-//                                expected,
-//                                stencil_size, stencil_half, stencil_pointer,_x_end,_ind_end,num_blocks+1);
+                        push_back_dynamic <<< blocks_load, threads_load >>> (lvl,
+                                z,
+                                levels,
+                                y_ex,
+                                tvec,
+                                offsets,
+                                y_num, x_num, z_num,
+                                particle_values.size(),
+                                expected,
+                                stencil_size, stencil_half, stencil_pointer,_x_end,_ind_end,num_blocks+1);
 
                     cudaDeviceSynchronize();
 

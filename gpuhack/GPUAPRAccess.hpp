@@ -93,7 +93,7 @@ public:
     thrust::device_vector<std::uint16_t> d_y_num_level;
     thrust::device_vector<std::uint16_t> d_z_num_level;
 
-
+    std::vector<std::size_t> h_level_offset;
 
     std::size_t max_number_chunks = 8191;
     std::size_t actual_number_chunks;
@@ -118,7 +118,7 @@ public:
         y_explicit.reserve(aprIt.total_number_particles());//size = number of particles
         std::vector<std::uint16_t> particle_values;
         particle_values.reserve(aprIt.total_number_particles());//size = number of particles
-        std::vector<std::size_t> h_level_offset(aprIt.level_max()+1,UINT64_MAX);//size = number of levels
+        h_level_offset.resize(aprIt.level_max()+1,0);//size = number of levels
 
         std::size_t x = 0;
         std::size_t z = 0;
