@@ -273,6 +273,9 @@ int main(int argc, char **argv) {
 }
 
 __global__ void test_dynamic_balance(const GPUAccessPtrs* gpuAccessPtrs,std::uint16_t* particle_data_output){
+    //
+    //  This kernel checks that every particle is only visited once in the iteration
+    //
 
     int chunk_index = blockDim.x * blockIdx.x + threadIdx.x; // the input to each kernel is its chunk index for which it should iterate over
 
@@ -321,12 +324,17 @@ __global__ void test_dynamic_balance(const GPUAccessPtrs* gpuAccessPtrs,std::uin
 }
 
 __global__ void test_dynamic_balance_XZYL(const GPUAccessPtrs* gpuAccessPtrs,std::uint16_t* particle_data_output){
+    //
+    //  This kernel loops over particles and saves the sum of x+z+y+l as a test for the access
+    //
 
     int chunk_index = blockDim.x * blockIdx.x + threadIdx.x; // the input to each kernel is its chunk index for which it should iterate over
 
     if(chunk_index >= gpuAccessPtrs->total_number_chunks){
         return; //out of bounds
     }
+
+    std::uint16_t local_kernel[3][3][3];
 
     //load in the begin and end row indexs
     std::size_t row_begin;
@@ -370,6 +378,8 @@ __global__ void test_dynamic_balance_XZYL(const GPUAccessPtrs* gpuAccessPtrs,std
             for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
                 uint16_t current_y = gpuAccessPtrs->y_part_coord[particle_global_index];
                 particle_data_output[particle_global_index]=current_y+x+z+level;
+
+                local_kernel[1][1][1] = current_y;
             }
 
         }
