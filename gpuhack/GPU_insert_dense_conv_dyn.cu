@@ -547,6 +547,8 @@ int main(int argc, char **argv) {
     }
 
 
+    cudaDeviceSetCacheConfig(cudaFuncCachePreferL1);
+
     ////////////////////
     ///
     /// Example of doing our level,z,x access using the GPU data structure
@@ -598,6 +600,7 @@ int main(int argc, char **argv) {
     std::uint16_t*                   tvec = thrust::raw_pointer_cast(d_temp_vec.data());
     std::uint16_t*                   expected = thrust::raw_pointer_cast(d_test_access_data.data());
     const std::float_t*		     stencil_pointer =  thrust::raw_pointer_cast(d_stencil.data());		// stencil pointer
+
 
     if(cudaGetLastError()!=cudaSuccess){
         std::cerr << "memory transfers failed!\n";
@@ -746,6 +749,8 @@ int main(int argc, char **argv) {
     /// Now check the data
     ///
     ////////////////////////////
+
+
 
     ExtraParticleData<float> utest_data(apr);
     apr.parameters.input_dir = options.directory;

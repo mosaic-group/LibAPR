@@ -277,14 +277,6 @@ public:
             raw_key |= (0 << KEY_EMPTY_SHIFT);
         }
 
-
-        uint64_t output_x = (raw_key & KEY_X_MASK) >> KEY_X_SHIFT;
-        uint64_t output_z = (raw_key & KEY_Z_MASK) >> KEY_Z_SHIFT;
-        uint64_t output_level = (raw_key & KEY_LEVEL_MASK) >> KEY_LEVEL_SHIFT;
-        uint64_t output_nz = (raw_key & KEY_EMPTY_MASK) >> KEY_EMPTY_SHIFT;
-
-        uint64_t short_nz = raw_key & 1;
-
         return raw_key;
 
     }
