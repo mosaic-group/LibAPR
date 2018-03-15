@@ -23,17 +23,6 @@
 #include "../src/data_structures/APR/ExtraParticleData.hpp"
 
 #include "GPUAPRAccess.hpp"
-#include "../../../../../Developer/NVIDIA/CUDA-9.1/include/host_defines.h"
-#include "../../../../../Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/cstddef"
-#include "../../../../../Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/cstdint"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cstdint"
-#include "../../../../../Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/include/c++/v1/cstring"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cstddef"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cstdio"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cstdlib"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cstring"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/ctime"
-#include "../../../../../usr/local/Cellar/llvm/3.8.1/include/c++/v1/cwchar"
 #include "../src/data_structures/APR/APR.hpp"
 
 struct cmdLineOptions{
@@ -124,7 +113,7 @@ int main(int argc, char **argv) {
     ExtraParticleData<uint16_t> iteration_check_particles(apr);
     iteration_check_particles.init_gpu(apr.total_number_particles());
 
-    int number_reps = 500;
+    int number_reps = 10;
 
     timer.start_timer("iterate over all particles");
 
