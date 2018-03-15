@@ -80,6 +80,17 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
                               std::size_t y_num,
                               std::size_t level);
 
+__global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t> *row_info,
+                                   const std::size_t *_chunk_index_end,
+                                   const std::uint16_t *particle_y,
+                                   const std::uint16_t *particle_data_input,
+                                   std::uint16_t *particle_data_output,
+                                   std::size_t offset,
+                                   std::size_t x_num,
+                                   std::size_t z_num,
+                                   std::size_t y_num,
+                                   std::size_t level);
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -193,7 +204,42 @@ int main(int argc, char **argv) {
     float cpu_iterate_time = timer.timings.back();
 
 
-    std::cout << "SPEEDUP GPU level (2D) vs. CPU iterate (Spatial Info)= " << cpu_iterate_time/gpu_iterate_time_si << std::endl;
+    std::cout << "SPEEDUP GPU level (2D) vs. CPU iterate (Insert Intensity)= " << cpu_iterate_time/gpu_iterate_time_si << std::endl;
+
+    ExtraParticleData<uint16_t> spatial_info_test2(apr);
+    spatial_info_test2.init_gpu(apr.total_number_particles());
+
+
+    timer.start_timer("summing the sptial informatino for each partilce on the GPU");
+    for (int rep = 0; rep < number_reps; ++rep) {
+
+        for (int level = apr.level_min(); level <= apr.level_max(); ++level) {
+
+            std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
+            std::size_t offset = gpuaprAccess.h_level_offset[level];
+
+            std::size_t x_num = apr.spatial_index_x_max(level);
+            std::size_t z_num = apr.spatial_index_z_max(level);
+            std::size_t y_num = apr.spatial_index_y_max(level);
+
+            dim3 threads_l(8, 1, 8);
+            dim3 blocks_l((x_num + threads_l.x - 1) / threads_l.x, 1, (z_num + threads_l.z - 1) / threads_l.z);
+
+            shared_update_conv <<< blocks_l, threads_l >>>
+                                        (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test2.gpu_pointer, offset,x_num,z_num,y_num,level);
+
+            cudaDeviceSynchronize();
+        }
+    }
+
+    timer.stop_timer();
+
+    float gpu_iterate_time_si2 = timer.timings.back();
+    //copy data back from gpu
+    spatial_info_test2.copy_data_to_host();
+
+
+    std::cout << "SPEEDUP GPU level (2D) + CONV vs. CPU iterate (Insert Intensities)= " << cpu_iterate_time/gpu_iterate_time_si2 << std::endl;
 
     //////////////////////////
     ///
@@ -293,6 +339,8 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
     std::size_t y_block = 1;
     std::size_t y_counter = 0;
 
+    double neighbour_sum = 0;
+
     std::size_t particle_global_index = particle_global_index_begin;
     while( particle_global_index < particle_global_index_end){
 
@@ -304,10 +352,22 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
             y_block++;
 
             //Do the cached loop
-            //T->P to
 
             for (int i = 0; i < y_counter; ++i) {
-                particle_data_output[particle_global_index_begin + index_cache[i]]=local_patch[threadIdx.z+1][threadIdx.x+1][(y_cache[i])%N+1];
+                //T->P to
+
+
+                int lower_bound = (1);
+
+                for(int q = -(lower_bound); q < (lower_bound+1); ++q){	 // z stencil
+                    for(int l = -(lower_bound); l < (lower_bound+1); ++l){   // x stencil
+                        for(int w = -(lower_bound); w < (lower_bound+1); ++w){	// y stencil
+                            neighbour_sum += local_patch[threadIdx.z+1+q][threadIdx.x+1+l][(y_cache[i])%N+1+w];
+                        }
+                    }
+                }
+
+                particle_data_output[particle_global_index_begin + index_cache[i]]= std::round(neighbour_sum/27.0f);
             }
 
             y_counter=0;
