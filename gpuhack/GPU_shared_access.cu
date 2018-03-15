@@ -113,7 +113,7 @@ int main(int argc, char **argv) {
     ExtraParticleData<uint16_t> iteration_check_particles(apr);
     iteration_check_particles.init_gpu(apr.total_number_particles());
 
-    int number_reps = 10;
+    int number_reps = 500;
 
     timer.start_timer("iterate over all particles");
 
@@ -305,10 +305,12 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
             y_block++;
         }
 
-        local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10]=particle_data_input[particle_global_index];
+        if(current_y < y_block*N) {
+            local_patch[threadIdx.z + 1][threadIdx.x + 1][current_y % N] = particle_data_input[particle_global_index];
+        }
 
         //T->P
-        particle_data_output[particle_global_index]=local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10];
+        particle_data_output[particle_global_index]=local_patch[threadIdx.z+1][threadIdx.x+1][current_y%N];
 
         particle_global_index++;
     }
