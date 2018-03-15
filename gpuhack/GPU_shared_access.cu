@@ -329,6 +329,11 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
     }
 
 
+    //do i need a last exit loop?
+    __syncthreads();
+    for (int i = 0; i < y_counter; ++i) {
+        particle_data_output[particle_global_index_begin + index_cache[i]]=local_patch[threadIdx.z+1][threadIdx.x+1][(y_cache[i])%N];
+    }
 
 
 }
