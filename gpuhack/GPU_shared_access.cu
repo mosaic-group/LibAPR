@@ -242,7 +242,8 @@ int main(int argc, char **argv) {
     std::cout << "SPEEDUP GPU level (2D) + CONV vs. CPU iterate (Insert Intensities)= " << cpu_iterate_time/gpu_iterate_time_si2 << std::endl;
 
 
-    std::cout << "Average time for loop: " << (gpu_iterate_time_si2/(number_reps*1.0f))*1000 << " ms" << std::endl;
+    std::cout << "Average time for loop conv: " << (gpu_iterate_time_si2/(number_reps*1.0f))*1000 << " ms" << std::endl;
+    std::cout << "Average time for loop insert: " << (gpu_iterate_time_si/(number_reps*1.0f))*1000 << " ms" << std::endl;
 
     //////////////////////////
     ///
@@ -305,13 +306,12 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
                               std::size_t y_num,
                               std::size_t level) {
 
-    const unsigned int N = 10;
+    const unsigned int N = 1; //1 + 7 seems optimal, removes bank conflicts.
 
-    __shared__ int local_patch[10][10][N+2]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ int local_patch[10][10][N+7]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
-
 
     int x_index = (blockDim.x * blockIdx.x + threadIdx.x);
     int z_index = (blockDim.z * blockIdx.z + threadIdx.z);
@@ -410,9 +410,10 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
                               std::size_t y_num,
                               std::size_t level) {
 
-    const unsigned int N = 10;
+    const unsigned int N = 1;
+    const unsigned int N_t = N+2;
 
-    __shared__ int local_patch[10][10][N+2]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ int local_patch[10][10][N+7]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
