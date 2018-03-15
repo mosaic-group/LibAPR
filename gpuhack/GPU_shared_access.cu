@@ -241,6 +241,9 @@ int main(int argc, char **argv) {
 
     std::cout << "SPEEDUP GPU level (2D) + CONV vs. CPU iterate (Insert Intensities)= " << cpu_iterate_time/gpu_iterate_time_si2 << std::endl;
 
+
+    std::cout << "Average time for loop: " << (gpu_iterate_time_si2/(number_reps*1.0f))*1000 << " ms" << std::endl;
+
     //////////////////////////
     ///
     /// Now check the data
