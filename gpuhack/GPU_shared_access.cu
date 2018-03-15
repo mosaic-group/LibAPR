@@ -88,6 +88,7 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
                               std::size_t offset,
                               std::size_t x_num,
                               std::size_t z_num,
+                              std::size_t y_num,
                               std::size_t level);
 
 
@@ -161,12 +162,13 @@ int main(int argc, char **argv) {
 
             std::size_t x_num = apr.spatial_index_x_max(level);
             std::size_t z_num = apr.spatial_index_z_max(level);
+            std::size_t y_num = apr.spatial_index_y_max(level);
 
             dim3 threads_l(8, 1, 8);
             dim3 blocks_l((x_num + threads_l.x - 1) / threads_l.x, 1, (z_num + threads_l.z - 1) / threads_l.z);
 
             shared_update <<< blocks_l, threads_l >>>
-                                     (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,level);
+                                     (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
 
             cudaDeviceSynchronize();
         }
@@ -264,9 +266,16 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
                               std::size_t offset,
                               std::size_t x_num,
                               std::size_t z_num,
+                              std::size_t y_num,
                               std::size_t level) {
 
-    __shared__ int local_patch[10][10][10];
+    const unsigned int N = 10;
+
+    __shared__ int local_patch[10][10][N]; // This is block wise shared memory
+
+    uint16_t y_cache[N]={0}; // These are local register/private caches
+    uint16_t index_cache[N]={0}; // These are local register/private caches
+
 
     int x_index = (blockDim.x * blockIdx.x + threadIdx.x);
     int z_index = (blockDim.z * blockIdx.z + threadIdx.z);
@@ -294,18 +303,44 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
         particle_global_index_begin = thrust::get<1>(row_info[current_row-1]);
     }
 
-    //loop over the particles in the row
-    for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
+    std::size_t y_block = 1;
+
+    std::size_t particle_global_index = particle_global_index_begin;
+    while( particle_global_index < particle_global_index_end){
+
         uint16_t current_y = particle_y[particle_global_index];
 
+        while(current_y >= y_block*N){
+            //threads need to wait for there progression
+            __syncthreads();
+            y_block++;
+        }
 
         local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10]=particle_data_input[particle_global_index];
 
+        //T->P
+        particle_data_output[particle_global_index]=local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10];
 
-        particle_data_output[particle_global_index]=particle_data_input[particle_global_index];
-
-        //__syncthreads();
+        particle_global_index++;
     }
+
+
+//    //loop over the particles in the row
+//    for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
+//        uint16_t current_y = particle_y[particle_global_index];
+//
+//        if(current_y < y_block*N){
+//            //P->T
+//            local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10]=particle_data_input[particle_global_index];
+//
+//        } else {
+//            __syncthreads();
+//
+//            //T->P
+//            particle_data_output[particle_global_index]=local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10];
+//        }
+//
+//    }
 
 
 
