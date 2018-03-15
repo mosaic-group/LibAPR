@@ -293,6 +293,7 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
     }
 
     std::size_t y_block = 1;
+    std::size_t y_counter = 0;
 
     std::size_t particle_global_index = particle_global_index_begin;
     while( particle_global_index < particle_global_index_end){
@@ -303,35 +304,29 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
             //threads need to wait for there progression
             __syncthreads();
             y_block++;
+
+            //Do the cached loop
+            //T->P to
+
+            for (int i = 0; i < y_counter; ++i) {
+                particle_data_output[particle_global_index_begin + index_cache[i]]=local_patch[threadIdx.z+1][threadIdx.x+1][(y_cache[i])%N];
+            }
+
+            y_counter=0;
         }
 
-        if(current_y < y_block*N) {
-            local_patch[threadIdx.z + 1][threadIdx.x + 1][current_y % N] = particle_data_input[particle_global_index];
-        }
 
-        //T->P
-        particle_data_output[particle_global_index]=local_patch[threadIdx.z+1][threadIdx.x+1][current_y%N];
+        //P->T
+        local_patch[threadIdx.z + 1][threadIdx.x + 1][current_y % N] = particle_data_input[particle_global_index];
 
+        //caching for update loop
+        index_cache[y_counter]=(particle_global_index-particle_global_index_begin);
+        y_cache[y_counter]=current_y;
+        y_counter++;
+
+        //global index update
         particle_global_index++;
     }
-
-
-//    //loop over the particles in the row
-//    for (std::size_t particle_global_index = particle_global_index_begin; particle_global_index < particle_global_index_end; ++particle_global_index) {
-//        uint16_t current_y = particle_y[particle_global_index];
-//
-//        if(current_y < y_block*N){
-//            //P->T
-//            local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10]=particle_data_input[particle_global_index];
-//
-//        } else {
-//            __syncthreads();
-//
-//            //T->P
-//            particle_data_output[particle_global_index]=local_patch[threadIdx.z+1][threadIdx.x+1][current_y%10];
-//        }
-//
-//    }
 
 
 
