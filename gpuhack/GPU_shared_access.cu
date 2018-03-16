@@ -85,11 +85,11 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
                                    const std::uint16_t *particle_y,
                                    const std::uint16_t *particle_data_input,
                                    std::uint16_t *particle_data_output,
-                                   std::size_t offset,
-                                   std::size_t x_num,
-                                   std::size_t z_num,
-                                   std::size_t y_num,
-                                   std::size_t level);
+                                   const std::size_t offset,
+                                   const std::size_t x_num,
+                                   const std::size_t z_num,
+                                   const std::size_t y_num,
+                                   const std::size_t level);
 
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -164,8 +164,8 @@ int main(int argc, char **argv) {
             std::size_t z_num = apr.spatial_index_z_max(level);
             std::size_t y_num = apr.spatial_index_y_max(level);
 
-            dim3 threads_l(8, 1, 8);
-            dim3 blocks_l((x_num + threads_l.x - 1) / threads_l.x, 1, (z_num + threads_l.z - 1) / threads_l.z);
+            dim3 threads_l(32, 1, 8);
+            dim3 blocks_l((x_num + 8 - 1) / 8, 1, (z_num + threads_l.z - 1) / threads_l.z);
 
             shared_update <<< blocks_l, threads_l >>>
                                      (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
@@ -222,8 +222,8 @@ int main(int argc, char **argv) {
             std::size_t z_num = apr.spatial_index_z_max(level);
             std::size_t y_num = apr.spatial_index_y_max(level);
 
-            dim3 threads_l(8, 1, 8);
-            dim3 blocks_l((x_num + threads_l.x - 1) / threads_l.x, 1, (z_num + threads_l.z - 1) / threads_l.z);
+            dim3 threads_l(32, 1, 8);
+            dim3 blocks_l((x_num + 8 - 1) / 8, 1, (z_num + threads_l.z - 1) / threads_l.z);
 
             shared_update_conv <<< blocks_l, threads_l >>>
                                         (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test2.gpu_pointer, offset,x_num,z_num,y_num,level);
@@ -300,15 +300,18 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
                               std::uint16_t *particle_data_output,
-                              std::size_t offset,
-                              std::size_t x_num,
-                              std::size_t z_num,
-                              std::size_t y_num,
-                              std::size_t level) {
+                              const std::size_t offset,
+                              const std::size_t x_num,
+                              const std::size_t z_num,
+                              const std::size_t y_num,
+                              const std::size_t level) {
 
     const unsigned int N = 1; //1 + 7 seems optimal, removes bank conflicts.
+    const unsigned int Nx = 8;
+    const unsigned int Nz = 8;
 
-    __shared__ int local_patch[10][10][N+7]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+
+    __shared__ int local_patch[Nz+2][Nx+2][N+7]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
@@ -323,6 +326,10 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
     if(z_index >= z_num){
         return; //out of bounds
+    }
+
+    if(threadIdx.x >= 8){
+        return;
     }
 
     int current_row = offset + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
@@ -418,6 +425,9 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
 
+    if(threadIdx.x >= 8){
+        return;
+    }
 
     int x_index = (blockDim.x * blockIdx.x + threadIdx.x);
     int z_index = (blockDim.z * blockIdx.z + threadIdx.z);

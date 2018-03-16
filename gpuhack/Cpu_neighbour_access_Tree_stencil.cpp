@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> neighbour_iterator(apr);
     APRIterator<uint16_t> apr_iterator(apr);
 
-    int num_rep = 1;
+    int num_rep = 100;
 
     timer.start_timer("APR serial iterator neighbours loop");
 
@@ -224,7 +224,7 @@ int main(int argc, char **argv) {
     ExtraParticleData<float> part_sum(apr);
 
 
-    const int stencil_half = 2;
+    const int stencil_half = 1;
     const int stencil_size = 2*stencil_half + 1;
 
     std::vector<double>  stencil;
@@ -322,6 +322,9 @@ int main(int argc, char **argv) {
 
     timer.stop_timer();
 
+    double time = timer.timings.back();
+
+    std::cout << 1000*time/(num_rep*(1.0f)) << " ms" << std::endl;
 
     //check the result
 
