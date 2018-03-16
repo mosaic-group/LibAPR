@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
 
-        for (int level = apr.level_min(); level <= apr.level_max(); ++level) {
+        for (int level = apr.level_min(); level <= aprIt.level_max(); ++level) {
 
             std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
             std::size_t offset = gpuaprAccess.h_level_offset[level];
@@ -164,8 +164,15 @@ int main(int argc, char **argv) {
             std::size_t z_num = apr.spatial_index_z_max(level);
             std::size_t y_num = apr.spatial_index_y_max(level);
 
-            dim3 threads_l(32, 1, 8);
-            dim3 blocks_l((x_num + 8 - 1) / 8, 1, (z_num + threads_l.z - 1) / threads_l.z);
+
+            dim3 threads_l(8, 1, 8);
+
+            int x_blocks = (x_num + 8 - 1) / 8;
+            int z_blocks = (z_num + 8 - 1) / 8;
+
+            //std::cout << "xb: " << x_blocks << " zb: " << z_blocks << std::endl;
+
+            dim3 blocks_l(x_blocks, 1, z_blocks);
 
             shared_update <<< blocks_l, threads_l >>>
                                      (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
@@ -222,8 +229,12 @@ int main(int argc, char **argv) {
             std::size_t z_num = apr.spatial_index_z_max(level);
             std::size_t y_num = apr.spatial_index_y_max(level);
 
-            dim3 threads_l(32, 1, 8);
-            dim3 blocks_l((x_num + 8 - 1) / 8, 1, (z_num + threads_l.z - 1) / threads_l.z);
+            dim3 threads_l(8, 1, 8);
+
+            int x_blocks = (x_num + 8 - 1) / 8;
+            int z_blocks = (z_num + 8 - 1) / 8;
+
+            dim3 blocks_l(x_blocks, 1, z_blocks);
 
             shared_update_conv <<< blocks_l, threads_l >>>
                                         (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test2.gpu_pointer, offset,x_num,z_num,y_num,level);
@@ -277,7 +288,9 @@ int main(int argc, char **argv) {
         } else {
             c_fail++;
             success = false;
-            //std::cout << spatial_info_test[aprIt] << " Level: " << aprIt.level() << std::endl;
+            if(aprIt.level() == (aprIt.level_min()+1)) {
+                std::cout << spatial_info_test[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x() << " z: " << aprIt.z() << std::endl;
+            }
         }
     }
 
@@ -316,8 +329,8 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
 
-    int x_index = (blockDim.x * blockIdx.x + threadIdx.x);
-    int z_index = (blockDim.z * blockIdx.z + threadIdx.z);
+    int x_index = (8 * blockIdx.x + threadIdx.x);
+    int z_index = (8 * blockIdx.z + threadIdx.z);
 
 
     if(x_index >= x_num){
@@ -329,6 +342,10 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
     }
 
     if(threadIdx.x >= 8){
+        return;
+    }
+
+    if(threadIdx.z >= 8){
         return;
     }
 
@@ -428,9 +445,13 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
     if(threadIdx.x >= 8){
         return;
     }
+    if(threadIdx.z >= 8){
+        return;
+    }
 
-    int x_index = (blockDim.x * blockIdx.x + threadIdx.x);
-    int z_index = (blockDim.z * blockIdx.z + threadIdx.z);
+
+    int x_index = (8 * blockIdx.x + threadIdx.x);
+    int z_index = (8 * blockIdx.z + threadIdx.z);
 
 
     if(x_index >= x_num){
@@ -489,6 +510,7 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
 
         //global index update
         particle_global_index++;
+
     }
 
 
