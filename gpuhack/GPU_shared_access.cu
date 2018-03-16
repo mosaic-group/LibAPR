@@ -458,27 +458,32 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
             for (int i = 0; i < y_counter; ++i) {
                 //T->P to
-
-                if (not_ghost) {
-                    int lower_bound = (1);
-
+                
+#pragma unroll
                     for (int q = -(1); q < (1 + 1); ++q) {     // z stencil
+#pragma unroll
                         for (int l = -(1); l < (1 + 1); ++l) {   // x stencil
                             //for (int w = -(lower_bound); w < (lower_bound + 1); ++w) {    // y stencil
-                            neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
-                                        (y_cache[i]) % N + 1] + local_patch[threadIdx.z + q][threadIdx.x + l][
-                                    (y_cache[i]) % N + 1 + -1] + local_patch[threadIdx.z + q][threadIdx.x + l][
-                                    (y_cache[i]) % N + 1 + 1];
+                            if (not_ghost) {
+                                neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
+                                                         (y_cache[i]) % N + 1] +
+                                                 local_patch[threadIdx.z + q][threadIdx.x + l][
+                                                         (y_cache[i]) % N + 1 + -1] +
+                                                 local_patch[threadIdx.z + q][threadIdx.x + l][
+                                                         (y_cache[i]) % N + 1 + 1];
+                            }
                             //}
                         }
                     }
 
+                if(not_ghost){
                     particle_data_output[particle_global_index_begin + index_cache[i]] = std::round(
                             neighbour_sum / 27.0f);
                 }
             }
 
             y_counter=0;
+            __syncthreads();
         }
 
 
@@ -502,8 +507,9 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
         if(not_ghost) {
             int lower_bound = (1);
-
+#pragma unroll
             for (int q = -(1); q < (1 + 1); ++q) {     // z stencil
+#pragma unroll
                 for (int l = -(1); l < (1 + 1); ++l) {   // x stencil
                     neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
                                              (y_cache[i]) % N + 1] + local_patch[threadIdx.z + q][threadIdx.x + l][
