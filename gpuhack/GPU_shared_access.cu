@@ -93,7 +93,6 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
 
 __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t> *row_info,
-                                  const std::size_t *_chunk_index_end,
                                   const std::uint16_t *particle_y,
                                   const std::uint16_t *particle_data_input,
                                   std::uint16_t *particle_data_output,
@@ -125,7 +124,7 @@ int main(int argc, char **argv) {
      * Set up the GPU Access data structures
      *
      */
-
+    // #TODO: Optimize this to now only load what I need, to reduce the memory footprint, also thrust free memory?
     GPUAPRAccess gpuaprAccess(apr);
 
     /*
@@ -282,7 +281,7 @@ int main(int argc, char **argv) {
             dim3 blocks_l(x_blocks, 1, z_blocks);
 
             shared_update_max <<< blocks_l, threads_l >>>
-                                             (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test2.gpu_pointer, offset,x_num,z_num,y_num,level);
+                                             (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test2.gpu_pointer, offset,x_num,z_num,y_num,level);
 
             cudaDeviceSynchronize();
         }
@@ -506,7 +505,7 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
                 for (int l = -(lower_bound); l < (lower_bound + 1); ++l) {   // x stencil
                     for (int w = -(lower_bound); w < (lower_bound + 1); ++w) {    // y stencil
                         neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
-                                (y_cache[i]) % N + 1 + w];
+                                (y_cache[i]) % N + 1 + w];// #TODO do i sync this?
                     }
                 }
             }
@@ -649,7 +648,6 @@ __device__ void get_row_begin_end(std::size_t* index_begin,
 };
 
 __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t> *row_info,
-                              const std::size_t *_chunk_index_end,
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
                               std::uint16_t *particle_data_output,
@@ -685,6 +683,7 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
     int x_index = (8 * blockIdx.x + threadIdx.x - 1);
     int z_index = (8 * blockIdx.z + threadIdx.z - 1);
 
+
     bool not_ghost=false;
 
     if((threadIdx.x > 0) && (threadIdx.x < 9) && (threadIdx.z > 0) && (threadIdx.z < 9)){
@@ -700,11 +699,20 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
         return; //out of bounds
     }
 
+    int x_index_p = (8 * blockIdx.x + threadIdx.x - 1)/2;
+    int z_index_p = (8 * blockIdx.z + threadIdx.z - 1)/2;
+
+
     std::size_t current_row = offset + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
+    //std::size_t current_row = offset + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
 
 
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
+
+    std::size_t particle_global_index_begin_p;
+    std::size_t particle_global_index_end_p;
+
 
     get_row_begin_end(&particle_global_index_begin, &particle_global_index_end, &current_row, row_info);
 
