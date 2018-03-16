@@ -168,6 +168,35 @@ int main(int argc, char **argv) {
     apr.particles_intensities.copy_data_to_gpu();
 
 
+    //warm up run for correct timings
+    for (int rep = 0; rep < 10; ++rep) {
+
+        for (int level = apr.level_min(); level <= aprIt.level_max(); ++level) {
+
+            std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
+            std::size_t offset = gpuaprAccess.h_level_offset[level];
+
+            std::size_t x_num = apr.spatial_index_x_max(level);
+            std::size_t z_num = apr.spatial_index_z_max(level);
+            std::size_t y_num = apr.spatial_index_y_max(level);
+
+
+            dim3 threads_l(10, 1, 10);
+
+            int x_blocks = (x_num + 8 - 1) / 8;
+            int z_blocks = (z_num + 8 - 1) / 8;
+
+            //std::cout << "xb: " << x_blocks << " zb: " << z_blocks << std::endl;
+
+            dim3 blocks_l(x_blocks, 1, z_blocks);
+
+            shared_update <<< blocks_l, threads_l >>>
+                                        (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
+
+            cudaDeviceSynchronize();
+        }
+    }
+
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
 
