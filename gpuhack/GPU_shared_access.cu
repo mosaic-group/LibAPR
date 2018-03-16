@@ -165,7 +165,7 @@ int main(int argc, char **argv) {
             std::size_t y_num = apr.spatial_index_y_max(level);
 
 
-            dim3 threads_l(8, 1, 8);
+            dim3 threads_l(10, 1, 10);
 
             int x_blocks = (x_num + 8 - 1) / 8;
             int z_blocks = (z_num + 8 - 1) / 8;
@@ -229,7 +229,7 @@ int main(int argc, char **argv) {
             std::size_t z_num = apr.spatial_index_z_max(level);
             std::size_t y_num = apr.spatial_index_y_max(level);
 
-            dim3 threads_l(8, 1, 8);
+            dim3 threads_l(10, 1, 10);
 
             int x_blocks = (x_num + 8 - 1) / 8;
             int z_blocks = (z_num + 8 - 1) / 8;
@@ -329,27 +329,33 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
 
-    int x_index = (8 * blockIdx.x + threadIdx.x);
-    int z_index = (8 * blockIdx.z + threadIdx.z);
+    int x_index = (8 * blockIdx.x + threadIdx.x - 1);
+    int z_index = (8 * blockIdx.z + threadIdx.z - 1);
 
 
-    if(x_index >= x_num){
+    if(x_index >= x_num || x_index < 0){
         return; //out of bounds
     }
 
-    if(z_index >= z_num){
+    if(z_index >= z_num || z_index < 0){
         return; //out of bounds
     }
 
-    if(threadIdx.x >= 8){
+    if(threadIdx.x >= 10){
         return;
     }
 
-    if(threadIdx.z >= 8){
+    if(threadIdx.z >= 10){
         return;
     }
 
     int current_row = offset + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
+
+    bool not_ghost=false;
+
+    if((threadIdx.x > 0) && (threadIdx.x < 9) && (threadIdx.z > 0) && (threadIdx.z < 9)){
+        not_ghost = true;
+    }
 
 
     std::size_t particle_global_index_begin;
@@ -383,18 +389,21 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
             for (int i = 0; i < y_counter; ++i) {
                 //T->P to
 
+                if (not_ghost) {
+                    int lower_bound = (1);
 
-                int lower_bound = (1);
-
-                for(int q = -(lower_bound); q < (lower_bound+1); ++q){	 // z stencil
-                    for(int l = -(lower_bound); l < (lower_bound+1); ++l){   // x stencil
-                        for(int w = -(lower_bound); w < (lower_bound+1); ++w){	// y stencil
-                            neighbour_sum += local_patch[threadIdx.z+1+q][threadIdx.x+1+l][(y_cache[i])%N+1+w];
+                    for (int q = -(lower_bound); q < (lower_bound + 1); ++q) {     // z stencil
+                        for (int l = -(lower_bound); l < (lower_bound + 1); ++l) {   // x stencil
+                            for (int w = -(lower_bound); w < (lower_bound + 1); ++w) {    // y stencil
+                                neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
+                                        (y_cache[i]) % N + 1 + w];
+                            }
                         }
                     }
-                }
 
-                particle_data_output[particle_global_index_begin + index_cache[i]]= std::round(neighbour_sum/27.0f);
+                    particle_data_output[particle_global_index_begin + index_cache[i]] = std::round(
+                            neighbour_sum / 27.0f);
+                }
             }
 
             y_counter=0;
@@ -402,7 +411,7 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
 
         //P->T
-        local_patch[threadIdx.z + 1][threadIdx.x + 1][current_y % N +1 ] = particle_data_input[particle_global_index];
+        local_patch[threadIdx.z ][threadIdx.x ][current_y % N +1 ] = particle_data_input[particle_global_index];
 
         //caching for update loop
         index_cache[y_counter]=(particle_global_index-particle_global_index_begin);
@@ -416,9 +425,26 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
     //do i need a last exit loop?
     __syncthreads();
+
     for (int i = 0; i < y_counter; ++i) {
-        particle_data_output[particle_global_index_begin + index_cache[i]]=local_patch[threadIdx.z+1][threadIdx.x+1][(y_cache[i])%N+1];
+
+        if(not_ghost) {
+            int lower_bound = (1);
+
+            for (int q = -(lower_bound); q < (lower_bound + 1); ++q) {     // z stencil
+                for (int l = -(lower_bound); l < (lower_bound + 1); ++l) {   // x stencil
+                    for (int w = -(lower_bound); w < (lower_bound + 1); ++w) {    // y stencil
+                        neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
+                                (y_cache[i]) % N + 1 + w];
+                    }
+                }
+            }
+
+            particle_data_output[particle_global_index_begin + index_cache[i]] = std::round(
+                    neighbour_sum / 27.0f);
+        }
     }
+
 
 
 }
@@ -442,23 +468,29 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
 
-    if(threadIdx.x >= 8){
+    if(threadIdx.x >= 10){
         return;
     }
-    if(threadIdx.z >= 8){
+    if(threadIdx.z >= 10){
         return;
     }
 
 
-    int x_index = (8 * blockIdx.x + threadIdx.x);
-    int z_index = (8 * blockIdx.z + threadIdx.z);
+    int x_index = (8 * blockIdx.x + threadIdx.x - 1);
+    int z_index = (8 * blockIdx.z + threadIdx.z - 1);
+
+    bool not_ghost=false;
+
+    if((threadIdx.x > 0) && (threadIdx.x < 9) && (threadIdx.z > 0) && (threadIdx.z < 9)){
+        not_ghost = true;
+    }
 
 
-    if(x_index >= x_num){
+    if((x_index >= x_num) || (x_index < 0)){
         return; //out of bounds
     }
 
-    if(z_index >= z_num){
+    if((z_index >= z_num) || (z_index < 0)){
         return; //out of bounds
     }
 
@@ -493,7 +525,10 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
             //T->P to
 
             for (int i = 0; i < y_counter; ++i) {
-                particle_data_output[particle_global_index_begin + index_cache[i]]=local_patch[threadIdx.z+1][threadIdx.x+1][(y_cache[i])%N];
+                if(not_ghost) {
+                    particle_data_output[particle_global_index_begin +
+                                         index_cache[i]] = local_patch[threadIdx.z][threadIdx.x][(y_cache[i]) % N];
+                }
             }
 
             y_counter=0;
@@ -501,7 +536,7 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
 
 
         //P->T
-        local_patch[threadIdx.z + 1][threadIdx.x + 1][current_y % N ] = particle_data_input[particle_global_index];
+        local_patch[threadIdx.z][threadIdx.x][current_y % N ] = particle_data_input[particle_global_index];
 
         //caching for update loop
         index_cache[y_counter]=(particle_global_index-particle_global_index_begin);
@@ -514,12 +549,15 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
     }
 
 
-    //do i need a last exit loop?
-    __syncthreads();
+        //do i need a last exit loop?
+        __syncthreads();
     for (int i = 0; i < y_counter; ++i) {
-        particle_data_output[particle_global_index_begin + index_cache[i]]=local_patch[threadIdx.z+1][threadIdx.x+1][(y_cache[i])%N];
+        if(not_ghost) {
+            particle_data_output[particle_global_index_begin +
+                                 index_cache[i]] = local_patch[threadIdx.z][threadIdx.x][
+                    (y_cache[i]) % N];
+        }
     }
-
 
 }
 
