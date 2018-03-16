@@ -30,6 +30,7 @@ struct cmdLineOptions{
     std::string stats = "";
     std::string directory = "";
     std::string input = "";
+    int num_rep = 100;
 };
 
 bool command_option_exists(char **begin, char **end, const std::string &option) {
@@ -62,6 +63,11 @@ cmdLineOptions read_command_line_options(int argc, char **argv) {
     }
     if(command_option_exists(argv, argv + argc, "-o")) {
         result.output = std::string(get_command_option(argv, argv + argc, "-o"));
+    }
+
+    if(command_option_exists(argv, argv + argc, "-numrep"))
+    {
+        result.num_rep = std::stoi(std::string(get_command_option(argv, argv + argc, "-numrep")));
     }
 
     return result;
@@ -135,7 +141,7 @@ int main(int argc, char **argv) {
     ExtraParticleData<uint16_t> iteration_check_particles(apr);
     iteration_check_particles.init_gpu(apr.total_number_particles());
 
-    int number_reps = 500;
+    int number_reps = options.num_rep;
 
     timer.start_timer("iterate over all particles");
 
@@ -458,7 +464,7 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
             for (int i = 0; i < y_counter; ++i) {
                 //T->P to
-                
+
 #pragma unroll
                     for (int q = -(1); q < (1 + 1); ++q) {     // z stencil
 #pragma unroll
