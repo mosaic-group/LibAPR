@@ -462,12 +462,14 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
                 if (not_ghost) {
                     int lower_bound = (1);
 
-                    for (int q = -(lower_bound); q < (lower_bound + 1); ++q) {     // z stencil
-                        for (int l = -(lower_bound); l < (lower_bound + 1); ++l) {   // x stencil
-                            for (int w = -(lower_bound); w < (lower_bound + 1); ++w) {    // y stencil
-                                neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
-                                        (y_cache[i]) % N + 1 + w];
-                            }
+                    for (int q = -(1); q < (1 + 1); ++q) {     // z stencil
+                        for (int l = -(1); l < (1 + 1); ++l) {   // x stencil
+                            //for (int w = -(lower_bound); w < (lower_bound + 1); ++w) {    // y stencil
+                            neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
+                                        (y_cache[i]) % N + 1] + local_patch[threadIdx.z + q][threadIdx.x + l][
+                                    (y_cache[i]) % N + 1 + -1] + local_patch[threadIdx.z + q][threadIdx.x + l][
+                                    (y_cache[i]) % N + 1 + 1];
+                            //}
                         }
                     }
 
@@ -501,12 +503,12 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
         if(not_ghost) {
             int lower_bound = (1);
 
-            for (int q = -(lower_bound); q < (lower_bound + 1); ++q) {     // z stencil
-                for (int l = -(lower_bound); l < (lower_bound + 1); ++l) {   // x stencil
-                    for (int w = -(lower_bound); w < (lower_bound + 1); ++w) {    // y stencil
-                        neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
-                                (y_cache[i]) % N + 1 + w];// #TODO do i sync this?
-                    }
+            for (int q = -(1); q < (1 + 1); ++q) {     // z stencil
+                for (int l = -(1); l < (1 + 1); ++l) {   // x stencil
+                    neighbour_sum += local_patch[threadIdx.z + q][threadIdx.x + l][
+                                             (y_cache[i]) % N + 1] + local_patch[threadIdx.z + q][threadIdx.x + l][
+                                             (y_cache[i]) % N + 1 + -1] + local_patch[threadIdx.z + q][threadIdx.x + l][
+                                             (y_cache[i]) % N + 1 + 1];
                 }
             }
 
