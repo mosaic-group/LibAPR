@@ -818,9 +818,9 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
         //Update steps for P->T
 
         //Check if its time to update the parent level
-        if(j/2==(y_p)) {
-            local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
-            //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
+        if(j==(2*y_p)) {
+            local_patch[threadIdx.z][threadIdx.x][(2*y_p) % N ] =  f_p; //initial update
+            local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
         }
 
 
@@ -843,7 +843,7 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
         }
 
         //parent update loop
-        if((y_p <= j/2) && ((particle_index_p+1) <particle_global_index_end_p)){
+        if((2*y_p <= j) && ((particle_index_p+1) <particle_global_index_end_p)){
             particle_index_p++;
             y_p= particle_y[particle_index_p];
             f_p = particle_data_input[particle_index_p];
@@ -858,15 +858,14 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
             }
         }
 
-        __syncthreads();
+        //__syncthreads();
     }
 
     //set the boundary condition (zeros in this case)
-    local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
-
-    __syncthreads();
 
     if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
+        local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
+        __syncthreads();
         if(not_ghost) {
             particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][(y_num-1) % N];
         }
@@ -967,7 +966,6 @@ __global__ void shared_update_min(const thrust::tuple <std::size_t, std::size_t>
         }
 
 
-
         //update at current level
         if((y_l <= j) && ((particle_index_l+1) <particle_global_index_end)){
             particle_index_l++;
@@ -985,13 +983,16 @@ __global__ void shared_update_min(const thrust::tuple <std::size_t, std::size_t>
             }
         }
 
-        __syncthreads();
+        //__syncthreads();
     }
 
     //set the boundary condition (zeros in this case)
-    local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
 
     if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
+
+        local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
+        __syncthreads();
+
         if(not_ghost) {
             particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][(y_num-1) % N];
         }
