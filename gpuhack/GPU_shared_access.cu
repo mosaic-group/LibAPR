@@ -816,13 +816,15 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
     for (int j = 0; j < (y_num); ++j) {
 
         //Update steps for P->T
-
+        __syncthreads();
         //Check if its time to update the parent level
-        if(j==(2*y_p)) {
-            local_patch[threadIdx.z][threadIdx.x][(2*y_p) % N ] =  f_p; //initial update
-            local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
-        }
 
+
+        if(j/2==(y_p)) {
+            local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
+            //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
+            //y_update_flag[j%2]=0;
+        }
 
         //Check if its time to update current level
         if(j==y_l) {
@@ -834,6 +836,8 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
         }
 
 
+
+        __syncthreads();
 
         //update at current level
         if((y_l <= j) && ((particle_index_l+1) <particle_global_index_end)){
@@ -858,7 +862,6 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
             }
         }
 
-        //__syncthreads();
     }
 
     //set the boundary condition (zeros in this case)
