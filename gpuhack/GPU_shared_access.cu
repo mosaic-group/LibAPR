@@ -762,8 +762,10 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
     std::size_t particle_global_index_begin_p;
     std::size_t particle_global_index_end_p;
 
-
+    // current level
     get_row_begin_end(&particle_global_index_begin, &particle_global_index_end, &current_row, row_info);
+    // parent level, level - 1, one resolution lower (coarser)
+    get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, &current_row_p, row_info);
 
     std::size_t y_block = 1;
     std::size_t y_counter = 0;
@@ -771,6 +773,12 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
     std::size_t particle_index_l = particle_global_index_begin;
     std::uint16_t y_l= particle_y[particle_index_l];
     local_patch[threadIdx.z][threadIdx.x][y_l % N ] =  particle_data_input[particle_index_l]; //initial update
+
+
+    std::size_t particle_index_p = particle_global_index_begin_p;
+    std::uint16_t y_p= particle_y[particle_index_p];
+    //local_patch[threadIdx.z][threadIdx.x][(2*y_p) % N ] =  particle_data_input[particle_index_p]; //initial update
+    //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  particle_data_input[particle_index_p]; //initial update
 
     for (int j = 0; j < y_num; ++j) {
         //update at current level
@@ -780,12 +788,19 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
             local_patch[threadIdx.z][threadIdx.x][y_l % N ] = particle_data_input[particle_index_l];
         }
 
+        //parent update loop
+        if((2*y_p < j) && ((particle_index_p+1) <particle_global_index_end_p)){
+            particle_index_p++;
+            y_p= particle_y[particle_index_p];
+            local_patch[threadIdx.z][threadIdx.x][(2*y_p) % N ] = particle_data_input[particle_index_p];
+            local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] = particle_data_input[particle_index_p];
+        }
+
         __syncthreads();
 
         if(y_l == j){
             if(not_ghost) {
                 particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][y_l % N];
-                //particle_data_output[particle_index_l] = particle_data_input[particle_index_l];
             }
         }
 
