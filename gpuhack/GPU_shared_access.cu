@@ -393,7 +393,7 @@ int main(int argc, char **argv) {
             c_fail++;
             success = false;
             if(aprIt.level() == (aprIt.level_min()+1)) {
-                std::cout << spatial_info_test2[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x() << " z: " << aprIt.z() << std::endl;
+                //std::cout << spatial_info_test2[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x() << " z: " << aprIt.z() << std::endl;
             }
         }
     }
@@ -714,10 +714,10 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const unsigned int N = 1;
+    const unsigned int N = 8;
     const unsigned int N_t = N+2;
 
-    __shared__ int local_patch[10][10][N+7]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ int local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
@@ -768,43 +768,76 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
     get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, &current_row_p, row_info);
 
     std::size_t y_block = 1;
-    std::size_t y_counter = 0;
+    std::uint16_t y_update_flag[2] = {0};
 
+    //current level variables
     std::size_t particle_index_l = particle_global_index_begin;
     std::uint16_t y_l= particle_y[particle_index_l];
-    local_patch[threadIdx.z][threadIdx.x][y_l % N ] =  particle_data_input[particle_index_l]; //initial update
+    std::uint16_t f_l = particle_data_input[particle_index_l];
 
 
+    //parent level variables
     std::size_t particle_index_p = particle_global_index_begin_p;
     std::uint16_t y_p= particle_y[particle_index_p];
-    //local_patch[threadIdx.z][threadIdx.x][(2*y_p) % N ] =  particle_data_input[particle_index_p]; //initial update
-    //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  particle_data_input[particle_index_p]; //initial update
+    std::uint16_t f_p = particle_data_input[particle_index_p];
 
-    for (int j = 0; j < y_num; ++j) {
+
+    //BOUNDARY CONDITIONS
+    local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
+
+    const int filter_offset = 1;
+
+    for (int j = 0; j < (y_num); ++j) {
+
+        //Update steps for P->T
+
+        //Check if its time to update current level
+        if(j==y_l) {
+            local_patch[threadIdx.z][threadIdx.x][y_l % N ] =  f_l; //initial update
+            y_update_flag[j%2]=1;
+        } else {
+            y_update_flag[j%2]=0;
+        }
+
+        //Check if its time to update the parent level
+        if(j==(2*y_p)) {
+            local_patch[threadIdx.z][threadIdx.x][(2*y_p) % N ] =  f_p; //initial update
+            local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
+        }
+
         //update at current level
-        if((y_l < j) && ((particle_index_l+1) <particle_global_index_end)){
+        if((y_l <= j) && ((particle_index_l+1) <particle_global_index_end)){
             particle_index_l++;
             y_l= particle_y[particle_index_l];
-            local_patch[threadIdx.z][threadIdx.x][y_l % N ] = particle_data_input[particle_index_l];
+            f_l = particle_data_input[particle_index_l];
         }
 
         //parent update loop
-        if((2*y_p < j) && ((particle_index_p+1) <particle_global_index_end_p)){
+        if((2*y_p <= j) && ((particle_index_p+1) <particle_global_index_end_p)){
             particle_index_p++;
             y_p= particle_y[particle_index_p];
-            local_patch[threadIdx.z][threadIdx.x][(2*y_p) % N ] = particle_data_input[particle_index_p];
-            local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] = particle_data_input[particle_index_p];
+            f_p = particle_data_input[particle_index_p];
         }
 
         __syncthreads();
+        //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
 
-        if(y_l == j){
+        if(y_update_flag[(j-filter_offset)%2]==1){
             if(not_ghost) {
-                particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][y_l % N];
+                particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][(j-filter_offset) % N];
             }
         }
 
         __syncthreads();
+    }
+
+    //set the boundary condition (zeros in this case)
+    local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
+
+    if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
+        if(not_ghost) {
+            particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][(y_num-1) % N];
+        }
     }
 
 
