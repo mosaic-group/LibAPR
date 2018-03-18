@@ -334,18 +334,7 @@ public:
 
         timer.stop_timer();
 
-
-        //copy to device
-        timer.start_timer("transfer access data to GPU");
-
-        d_y_part_coord.resize(aprIt.total_number_particles());
-        thrust::copy(y_explicit.begin(), y_explicit.end(),d_y_part_coord.data()); //y-coordinates
-        d_level_offset.resize(aprIt.level_max()+1);
-        thrust::copy(h_level_offset.begin(),h_level_offset.end(),d_level_offset.data()); //cumsum of number of rows in lower levels
-
-        d_row_global_index.resize(row_global_index.size());
-        thrust::copy(row_global_index.begin(),row_global_index.end(),d_row_global_index.data());
-
+        timer.start_timer("domain size transfer");
         std::vector<uint16_t> x_num_level;
         std::vector<uint16_t> z_num_level;
         std::vector<uint16_t> y_num_level;
@@ -369,6 +358,30 @@ public:
 
 
         timer.stop_timer();
+
+        //copy to device
+        timer.start_timer("transfer level offset");
+        d_level_offset.resize(aprIt.level_max()+1);
+        thrust::copy(h_level_offset.begin(),h_level_offset.end(),d_level_offset.data()); //cumsum of number of rows in lower levels
+        timer.stop_timer();
+
+
+        timer.start_timer("transfer y");
+        d_y_part_coord.resize(aprIt.total_number_particles());
+
+
+        thrust::copy(y_explicit.begin(), y_explicit.end(),d_y_part_coord.data()); //y-coordinates
+
+        timer.stop_timer();
+
+        timer.start_timer("global index transfer");
+
+        d_row_global_index.resize(row_global_index.size());
+        thrust::copy(row_global_index.begin(),row_global_index.end(),d_row_global_index.data());
+
+        timer.stop_timer();
+
+
 
 
         //Figuring out how many particles per chunk are required
