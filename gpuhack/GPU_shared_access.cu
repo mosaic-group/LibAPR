@@ -75,19 +75,17 @@ cmdLineOptions read_command_line_options(int argc, char **argv) {
 
 
 
-__global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *row_info,
-                              const std::size_t *_chunk_index_end,
+__global__ void shared_update(const std::size_t *row_info,
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
                               std::uint16_t *particle_data_output,
-                              std::size_t offset,
-                              std::size_t x_num,
-                              std::size_t z_num,
-                              std::size_t y_num,
-                              std::size_t level);
+                              const std::size_t offset,
+                              const std::size_t x_num,
+                              const std::size_t z_num,
+                              const std::size_t y_num,
+                              const std::size_t level);
 
-__global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t> *row_info,
-                                   const std::size_t *_chunk_index_end,
+__global__ void shared_update_conv(const std::size_t *row_info,
                                    const std::uint16_t *particle_y,
                                    const std::uint16_t *particle_data_input,
                                    std::uint16_t *particle_data_output,
@@ -98,7 +96,7 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
                                    const std::size_t level);
 
 
-__global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t> *row_info,
+__global__ void shared_update_max(const std::size_t *row_info,
                                   const std::uint16_t *particle_y,
                                   const std::uint16_t *particle_data_input,
                                   std::uint16_t *particle_data_output,
@@ -108,7 +106,7 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
                                   const std::uint16_t* level_y_num,
                                   const std::size_t level) ;
 
-__global__ void shared_update_min(const thrust::tuple <std::size_t, std::size_t> *row_info,
+__global__ void shared_update_min(const std::size_t *row_info,
                                   const std::uint16_t *particle_y,
                                   const std::uint16_t *particle_data_input,
                                   std::uint16_t *particle_data_output,
@@ -140,7 +138,8 @@ int main(int argc, char **argv) {
      *
      */
     // #TODO: Optimize this to now only load what I need, to reduce the memory footprint, also thrust free memory?
-    GPUAPRAccess gpuaprAccess(apr);
+    GPUAPRAccess gpuaprAccess(aprIt);
+    //gpuaprAccess.initialize_gpu_access_alternate(apr);
 
     /*
      *  Now launch the kernels across all the chunks determiend by the load balancing
@@ -201,7 +200,7 @@ int main(int argc, char **argv) {
             dim3 blocks_l(x_blocks, 1, z_blocks);
 
             shared_update <<< blocks_l, threads_l >>>
-                                        (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
+                                        (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
 
             cudaDeviceSynchronize();
         }
@@ -230,7 +229,7 @@ int main(int argc, char **argv) {
             dim3 blocks_l(x_blocks, 1, z_blocks);
 
             shared_update <<< blocks_l, threads_l >>>
-                                     (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
+                                     (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
 
             cudaDeviceSynchronize();
         }
@@ -292,7 +291,7 @@ int main(int argc, char **argv) {
             dim3 blocks_l(x_blocks, 1, z_blocks);
 
             shared_update_conv <<< blocks_l, threads_l >>>
-                                        (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access._chunk_index_end, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test2.gpu_pointer, offset,x_num,z_num,y_num,level);
+                                        (gpuaprAccess.gpu_access.row_global_index,  gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test2.gpu_pointer, offset,x_num,z_num,y_num,level);
 
             cudaDeviceSynchronize();
         }
@@ -330,11 +329,11 @@ int main(int argc, char **argv) {
 
             if(level==apr.level_min()){
                 shared_update_min <<< blocks_l, threads_l >>>
-                                                 (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
+                                                 (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
 
             } else {
                 shared_update_max <<< blocks_l, threads_l >>>
-                                                 (gpuaprAccess.gpu_access.row_info, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
+                                                 (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
 
             }
             cudaDeviceSynchronize();
@@ -412,8 +411,11 @@ int main(int argc, char **argv) {
         } else {
             c_fail++;
             success = false;
-            if(c_fail< 100) {
-                std::cout << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x() << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
+            if(aprIt.level() == aprIt.level_min()) {
+                if (c_fail < 100) {
+                    std::cout << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
+                              << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
+                }
             }
         }
     }
@@ -432,8 +434,7 @@ int main(int argc, char **argv) {
     //
 
 
-__global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t> *row_info,
-                              const std::size_t *_chunk_index_end,
+__global__ void shared_update_conv(const std::size_t *row_info,
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
                               std::uint16_t *particle_data_output,
@@ -485,12 +486,12 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
 
-    particle_global_index_end = thrust::get<1>(row_info[current_row]);
+    particle_global_index_end = (row_info[current_row]);
 
     if (current_row == 0) {
         particle_global_index_begin = 0;
     } else {
-        particle_global_index_begin = thrust::get<1>(row_info[current_row-1]);
+        particle_global_index_begin = (row_info[current_row-1]);
     }
 
     std::size_t y_block = 1;
@@ -581,8 +582,7 @@ __global__ void shared_update_conv(const thrust::tuple <std::size_t, std::size_t
 
 }
 
-__global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *row_info,
-                              const std::size_t *_chunk_index_end,
+__global__ void shared_update(const std::size_t *row_info,
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
                               std::uint16_t *particle_data_output,
@@ -633,12 +633,12 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
 
-    particle_global_index_end = thrust::get<1>(row_info[current_row]);
+    particle_global_index_end = (row_info[current_row]);
 
     if (current_row == 0) {
         particle_global_index_begin = 0;
     } else {
-        particle_global_index_begin = thrust::get<1>(row_info[current_row-1]);
+        particle_global_index_begin = (row_info[current_row-1]);
     }
 
     std::size_t y_block = 1;
@@ -697,20 +697,20 @@ __global__ void shared_update(const thrust::tuple <std::size_t, std::size_t> *ro
 __device__ void get_row_begin_end(std::size_t* index_begin,
                                   std::size_t* index_end,
                                   std::size_t* current_row,
-                                  const thrust::tuple <std::size_t, std::size_t> *row_info){
+                                  const std::size_t *row_info){
 
-    *index_end = thrust::get<1>(row_info[*current_row]);
+    *index_end = (row_info[*current_row]);
 
     if (*current_row == 0) {
         *index_begin = 0;
     } else {
-        *index_begin = thrust::get<1>(row_info[*current_row-1]);
+        *index_begin =(row_info[*current_row-1]);
     }
 
 
 };
 
-__global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t> *row_info,
+__global__ void shared_update_max(const std::size_t *row_info,
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
                               std::uint16_t *particle_data_output,
@@ -807,6 +807,10 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
         y_p = y_num+1;//no particles don't do anything
     }
 
+    if(particle_global_index_begin == particle_global_index_end){
+        y_l = y_num+1;//no particles don't do anything
+    }
+
 
     //BOUNDARY CONDITIONS
     local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
@@ -872,7 +876,7 @@ __global__ void shared_update_max(const thrust::tuple <std::size_t, std::size_t>
 
 
 }
-__global__ void shared_update_min(const thrust::tuple <std::size_t, std::size_t> *row_info,
+__global__ void shared_update_min(const std::size_t *row_info,
                                   const std::uint16_t *particle_y,
                                   const std::uint16_t *particle_data_input,
                                   std::uint16_t *particle_data_output,
