@@ -1009,17 +1009,19 @@ if (not_ghost) {\
 
 #define LOCALPATCHCONV(particle_output,index,z,x,y,neighbour_sum)\
 neighbour_sum=0;\
-for (int q = 0; q < 3; ++q) {\
-    for (int l = 0; l < 3; ++l) {\
-        if (not_ghost) {\
-            neighbour_sum += local_patch[z + q - 1][x + l - 1][(y+N)%N]\
-                 + local_patch[z + q - 1][x + l - 1][(y+N-1)%N]\
-                 + local_patch[z + q - 1][x + l - 1][(y+N+1)%N];\
-        }\
+if (not_ghost) {\
+    for (int q = 0; q < 3; ++q) {\
+        neighbour_sum += local_patch[z + q - 1][x + 0 - 1][(y+N)%N]\
+                 + local_patch[z + q - 1][x + 0 - 1][(y+N-1)%N]\
+                 + local_patch[z + q - 1][x + 0 - 1][(y+N+1)%N]\
+                 + local_patch[z + q - 1][x + 1 - 1][(y+N)%N]\
+                 + local_patch[z + q - 1][x + 1 - 1][(y+N-1)%N]\
+                 + local_patch[z + q - 1][x + 1 - 1][(y+N+1)%N]\
+                 + local_patch[z + q - 1][x + 2 - 1][(y+N)%N]\
+                 + local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]\
+                 + local_patch[z + q - 1][x + 2 - 1][(y+N+1)%N];\
     }\
-}\
- if (not_ghost) {\
-particle_output[index] = std::round(neighbour_sum / 27.0f);\
+    particle_output[index] = std::round(neighbour_sum / 27.0f);\
 }\
 
 
@@ -1230,13 +1232,11 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const unsigned int N = 8;
+    const unsigned int N = 4;
     const unsigned int N_t = N+2;
 
-    __shared__ std::float_t local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::float_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
-    uint16_t y_cache[N]={0}; // These are local register/private caches
-    uint16_t index_cache[N]={0}; // These are local register/private caches
 
     if(threadIdx.x >= 10){
         return;
@@ -1263,10 +1263,7 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
@@ -1276,10 +1273,6 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
@@ -1459,9 +1452,9 @@ __global__ void shared_update_min(const std::size_t *row_info,
     const int y_num = level_y_num[level];
     const int z_num = level_z_num[level];
 
-    const unsigned int N = 8;
+    const unsigned int N = 4;
 
-    __shared__ std::float_t local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::float_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
@@ -1490,10 +1483,7 @@ __global__ void shared_update_min(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
@@ -1502,10 +1492,7 @@ __global__ void shared_update_min(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
