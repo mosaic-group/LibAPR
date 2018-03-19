@@ -368,7 +368,7 @@ public:
 
         timer.start_timer("transfer y");
         d_y_part_coord.resize(aprIt.total_number_particles());
-
+        std::cout << (aprIt.total_number_particles()*2.0f/1000000.0f) << std::endl;
 
         thrust::copy(y_explicit.begin(), y_explicit.end(),d_y_part_coord.data()); //y-coordinates
 

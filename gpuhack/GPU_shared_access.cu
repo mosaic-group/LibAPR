@@ -141,6 +141,16 @@ int main(int argc, char **argv) {
     GPUAPRAccess gpuaprAccess(aprIt);
     //gpuaprAccess.initialize_gpu_access_alternate(apr);
 
+
+    // Get dense representation of APR tree
+    APRTree<uint16_t> aprTree(apr);
+    APRTreeIterator<uint16_t> treeIt(aprTree);
+
+    GPUAPRAccess gpuaprAccessTree(treeIt);
+
+
+
+
     /*
      *  Now launch the kernels across all the chunks determiend by the load balancing
      *
@@ -241,6 +251,46 @@ int main(int argc, char **argv) {
     //copy data back from gpu
     spatial_info_test.copy_data_to_host();
 
+    spatial_info_test.gpu_data.clear();
+    spatial_info_test.gpu_data.shrink_to_fit();
+
+    bool success = true;
+
+    uint64_t c_fail= 0;
+    uint64_t c_pass= 0;
+
+
+    /*
+     *  Check the spatial data, by comparing x+y+z+level for every particle
+     *
+     */
+
+    c_pass = 0;
+    c_fail = 0;
+    success=true;
+
+
+    for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+        //This step is required for all loops to set the iterator by the particle number
+        aprIt.set_iterator_to_particle_by_number(particle_number);
+        //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
+        if(spatial_info_test[aprIt]==apr.particles_intensities[aprIt]){
+            c_pass++;
+        } else {
+            c_fail++;
+            success = false;
+            if(aprIt.level() == (aprIt.level_min()+1)) {
+                std::cout << spatial_info_test[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x() << " z: " << aprIt.z() << std::endl;
+            }
+        }
+    }
+
+    if(success){
+        std::cout << "Spatial information Check, PASS" << std::endl;
+    } else {
+        std::cout << "Spatial information Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
+    }
+
 
     /*
     *  Performance comparison with CPU
@@ -269,7 +319,6 @@ int main(int argc, char **argv) {
 
     ExtraParticleData<uint16_t> spatial_info_test2(apr);
     spatial_info_test2.init_gpu(apr.total_number_particles());
-
 
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
@@ -302,6 +351,9 @@ int main(int argc, char **argv) {
     float gpu_iterate_time_si2 = timer.timings.back();
     //copy data back from gpu
     spatial_info_test2.copy_data_to_host();
+
+    spatial_info_test2.gpu_data.clear();
+    spatial_info_test2.gpu_data.shrink_to_fit();
 
 
     ExtraParticleData<uint16_t> spatial_info_test3(apr);
@@ -346,6 +398,9 @@ int main(int argc, char **argv) {
     spatial_info_test3.copy_data_to_host();
 
 
+    spatial_info_test3.gpu_data.clear();
+    spatial_info_test3.gpu_data.shrink_to_fit();
+
     std::cout << "SPEEDUP GPU level (2D) + CONV vs. CPU iterate (Insert Intensities)= " << cpu_iterate_time/gpu_iterate_time_si2 << std::endl;
 
 
@@ -358,44 +413,6 @@ int main(int argc, char **argv) {
     /// Now check the data
     ///
     ////////////////////////////
-
-
-    bool success = true;
-
-    uint64_t c_fail= 0;
-    uint64_t c_pass= 0;
-
-
-    /*
-     *  Check the spatial data, by comparing x+y+z+level for every particle
-     *
-     */
-
-    c_pass = 0;
-    c_fail = 0;
-    success=true;
-
-
-    for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
-        //This step is required for all loops to set the iterator by the particle number
-        aprIt.set_iterator_to_particle_by_number(particle_number);
-        //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
-        if(spatial_info_test[aprIt]==apr.particles_intensities[aprIt]){
-            c_pass++;
-        } else {
-            c_fail++;
-            success = false;
-            if(aprIt.level() == (aprIt.level_min()+1)) {
-                std::cout << spatial_info_test[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x() << " z: " << aprIt.z() << std::endl;
-            }
-        }
-    }
-
-    if(success){
-        std::cout << "Spatial information Check, PASS" << std::endl;
-    } else {
-        std::cout << "Spatial information Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
-    }
 
     c_pass = 0;
     c_fail = 0;
