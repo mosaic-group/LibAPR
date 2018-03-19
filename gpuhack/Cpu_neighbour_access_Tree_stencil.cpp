@@ -246,7 +246,7 @@ int main(int argc, char **argv) {
     ExtraParticleData<float> part_sum(apr);
 
 
-    const int stencil_half = 1;
+    const int stencil_half = 2;
     const int stencil_size = 2*stencil_half + 1;
 
     std::vector<double>  stencil;
