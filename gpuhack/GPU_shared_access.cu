@@ -840,6 +840,14 @@ __device__ void get_row_begin_end(std::size_t* index_begin,
 
 };
 
+template<typename T>
+__device__ T local_patch_operation(){
+
+    T output;
+    return output;
+}
+
+
 __global__ void shared_update_max(const std::size_t *row_info,
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
@@ -866,7 +874,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     const unsigned int N = 8;
 
-    __shared__ int local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ uint16_t local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
@@ -1038,7 +1046,7 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
     const unsigned int N = 8;
     const unsigned int N_t = N+2;
 
-    __shared__ int local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ uint16_t local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
@@ -1246,7 +1254,7 @@ __global__ void shared_update_min(const std::size_t *row_info,
 
     const unsigned int N = 8;
 
-    __shared__ int local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ uint16_t local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
