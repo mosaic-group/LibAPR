@@ -865,7 +865,6 @@ __global__ void shared_update_max(const std::size_t *row_info,
     const int z_num_p = level_z_num[level-1];
 
     const unsigned int N = 8;
-    const unsigned int N_t = N+2;
 
     __shared__ int local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
@@ -947,22 +946,23 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     const int filter_offset = 1;
 
+
+
     for (int j = 0; j < (y_num); ++j) {
 
         //Update steps for P->T
-        //__syncthreads();
+        __syncthreads();
         //Check if its time to update the parent level
 
 
         if(j/2==(y_p)) {
             local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
-            //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
-            //y_update_flag[j%2]=0;
+
         }
 
         //Check if its time to update current level
         if(j==y_l) {
-            local_patch[threadIdx.z][threadIdx.x][y_l % N ] =  f_l; //initial update
+            local_patch[threadIdx.z][threadIdx.x][j % N ] =  f_l; //initial update
             y_update_flag[j%2]=1;
             y_update_index[j%2] = particle_index_l;
         } else {
@@ -986,8 +986,9 @@ __global__ void shared_update_max(const std::size_t *row_info,
         __syncthreads();
         //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
 
-        if(y_update_flag[(j-filter_offset)%2]==1){
+        if(y_update_flag[(j-filter_offset+2)%2]==1){
             if(not_ghost) {
+
                 particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
             }
         }
@@ -1145,13 +1146,12 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
     for (int j = 0; j < (y_num); ++j) {
 
         //Update steps for P->T
-        //__syncthreads();
+        __syncthreads();
 
 
         //Check if its time to update the parent level
         if(j/2==(y_p)) {
             local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
-            //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
         }
 
         //Check if its time to update current level
@@ -1195,11 +1195,12 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
         __syncthreads();
         //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
 
-        if(y_update_flag[(j-filter_offset)%2]==1){
+        if(y_update_flag[(j-filter_offset+2)%2]==1){
             if(not_ghost) {
                 particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
             }
         }
+
 
     }
 
@@ -1212,6 +1213,8 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
             particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][(y_num-1) % N];
         }
     }
+
+
 
 
 }
@@ -1339,6 +1342,8 @@ __global__ void shared_update_min(const std::size_t *row_info,
          *
          */
 
+        __syncthreads();
+
         //Check if its time to update current level
         if(j==y_l) {
             local_patch[threadIdx.z][threadIdx.x][y_l % N ] =  f_l; //initial update
@@ -1378,13 +1383,12 @@ __global__ void shared_update_min(const std::size_t *row_info,
         __syncthreads();
         //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
 
-        if(y_update_flag[(j-filter_offset)%2]==1){
+        if(y_update_flag[(j-filter_offset+2)%2]==1){
             if(not_ghost) {
                 particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
             }
         }
 
-        //__syncthreads();
     }
 
     //set the boundary condition (zeros in this case)
