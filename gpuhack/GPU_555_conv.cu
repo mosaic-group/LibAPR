@@ -416,40 +416,40 @@ int main(int argc, char **argv) {
             dim3 blocks_l(x_blocks, 1, z_blocks);
 
             if(level==apr.level_min()){
-                shared_update_min <<< blocks_l, threads_l >>>
-                                                (gpuaprAccess.gpu_access.row_global_index,
-                                                        gpuaprAccess.gpu_access.y_part_coord,
-                                                        gpuaprAccess.gpu_access.level_offsets,
-                                                        apr.particles_intensities.gpu_pointer,
-                                                        gpuaprAccessTree.gpu_access.row_global_index,
-                                                        gpuaprAccessTree.gpu_access.y_part_coord,
-                                                        gpuaprAccessTree.gpu_access.level_offsets,
-                                                        ds_parts.gpu_pointer,
-                                                        spatial_info_test3.gpu_pointer,
-                                                        gpuaprAccess.gpu_access.level_x_num,
-                                                        gpuaprAccess.gpu_access.level_z_num,
-                                                        gpuaprAccess.gpu_access.level_y_num,
-                                                        level);
+//                shared_update_min <<< blocks_l, threads_l >>>
+//                                                (gpuaprAccess.gpu_access.row_global_index,
+//                                                        gpuaprAccess.gpu_access.y_part_coord,
+//                                                        gpuaprAccess.gpu_access.level_offsets,
+//                                                        apr.particles_intensities.gpu_pointer,
+//                                                        gpuaprAccessTree.gpu_access.row_global_index,
+//                                                        gpuaprAccessTree.gpu_access.y_part_coord,
+//                                                        gpuaprAccessTree.gpu_access.level_offsets,
+//                                                        ds_parts.gpu_pointer,
+//                                                        spatial_info_test3.gpu_pointer,
+//                                                        gpuaprAccess.gpu_access.level_x_num,
+//                                                        gpuaprAccess.gpu_access.level_z_num,
+//                                                        gpuaprAccess.gpu_access.level_y_num,
+//                                                        level);
 
             } else if(level==apr.level_max()) {
                 shared_update_max <<< blocks_l, threads_l >>>
                                                 (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
 
             } else {
-                shared_update_interior_level <<< blocks_l, threads_l >>>
-                                                           (gpuaprAccess.gpu_access.row_global_index,
-                                                                   gpuaprAccess.gpu_access.y_part_coord,
-                                                                   gpuaprAccess.gpu_access.level_offsets,
-                                                                   apr.particles_intensities.gpu_pointer,
-                                                                   gpuaprAccessTree.gpu_access.row_global_index,
-                                                                   gpuaprAccessTree.gpu_access.y_part_coord,
-                                                                   gpuaprAccessTree.gpu_access.level_offsets,
-                                                                   ds_parts.gpu_pointer,
-                                                                   spatial_info_test3.gpu_pointer,
-                                                                   gpuaprAccess.gpu_access.level_x_num,
-                                                                   gpuaprAccess.gpu_access.level_z_num,
-                                                                   gpuaprAccess.gpu_access.level_y_num,
-                                                                   level);
+                //shared_update_interior_level <<< blocks_l, threads_l >>>
+//                                                           (gpuaprAccess.gpu_access.row_global_index,
+//                                                                   gpuaprAccess.gpu_access.y_part_coord,
+//                                                                   gpuaprAccess.gpu_access.level_offsets,
+//                                                                   apr.particles_intensities.gpu_pointer,
+//                                                                   gpuaprAccessTree.gpu_access.row_global_index,
+//                                                                   gpuaprAccessTree.gpu_access.y_part_coord,
+//                                                                   gpuaprAccessTree.gpu_access.level_offsets,
+//                                                                   ds_parts.gpu_pointer,
+//                                                                   spatial_info_test3.gpu_pointer,
+//                                                                   gpuaprAccess.gpu_access.level_x_num,
+//                                                                   gpuaprAccess.gpu_access.level_z_num,
+//                                                                   gpuaprAccess.gpu_access.level_y_num,
+//                                                                   level);
             }
             cudaDeviceSynchronize();
         }
@@ -736,11 +736,32 @@ __global__ void shared_update_max(const std::size_t *row_info,
         __syncthreads();
         //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
 
-        if(y_update_flag[(j-filter_offset+3)%3]==1){
+        if(y_update_flag[(j-filter_offset+3)%3]==1) {
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
             //particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
 
-            LOCALPATCHCONV(particle_data_output,y_update_index[(j+3-filter_offset)%3],threadIdx.z,threadIdx.x,j-2,neighbour_sum);
+            //LOCALPATCHCONV(particle_data_output,y_update_index[(j+3-filter_offset)%3],threadIdx.z,threadIdx.x,j-2,neighbour_sum);
+
+            if (not_ghost) {
+                neighbour_sum = 0;
+#pragma unroll
+                for (int q = 0; q < 5; ++q) {
+#pragma unroll
+                    for (int l = 0; l < 5; ++l) {
+
+                        neighbour_sum += local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N - 2) % N]
+                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N - 1) % N]
+                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N) % N]
+                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N + 1) % N]
+                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N + 2) % N];
+
+                    }
+                }
+            }
+            if (not_ghost) {
+                 particle_data_output[y_update_index[(j+3-filter_offset)%3]] = std::round(neighbour_sum / 27.0f);
+            }
+
 
         }
 
