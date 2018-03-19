@@ -260,10 +260,6 @@ int main(int argc, char **argv) {
 
     for (int j = 0; j < num_rep; ++j) {
 
-
-
-
-
         for (int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
 
             unsigned int z = 0;
