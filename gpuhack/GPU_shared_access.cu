@@ -1049,12 +1049,11 @@ __global__ void shared_update_max(const std::size_t *row_info,
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const unsigned int N = 8;
+    const unsigned int N = 4;
 
-    __shared__ std::float_t local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::float_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
-    uint16_t y_cache[N]={0}; // These are local register/private caches
-    uint16_t index_cache[N]={0}; // These are local register/private caches
+
 
     if(threadIdx.x >= 10){
         return;
@@ -1079,11 +1078,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
@@ -1092,10 +1087,6 @@ __global__ void shared_update_max(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 

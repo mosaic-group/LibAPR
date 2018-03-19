@@ -597,13 +597,11 @@ __global__ void shared_update_max(const std::size_t *row_info,
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const unsigned int N = 8;
+    const unsigned int N = 5;
     const unsigned int Nd = 10;
 
-    __shared__ std::float_t local_patch[12][12][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::float_t local_patch[12][12][5]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
-    uint16_t y_cache[N]={0}; // These are local register/private caches
-    uint16_t index_cache[N]={0}; // These are local register/private caches
 
     if(threadIdx.x >= 12){
         return;
@@ -630,9 +628,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
@@ -642,9 +638,6 @@ __global__ void shared_update_max(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
@@ -746,16 +739,43 @@ __global__ void shared_update_max(const std::size_t *row_info,
                 neighbour_sum = 0;
 #pragma unroll
                 for (int q = 0; q < 5; ++q) {
-#pragma unroll
-                    for (int l = 0; l < 5; ++l) {
+//#pragma unroll
+//                    for (int l = 0; l < 5; ++l) {
+//
+//                        neighbour_sum += local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N - 2) % N]
+//                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N - 1) % N]
+//                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N) % N]
+//                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N + 1) % N]
+//                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N + 2) % N];
+//
+//                    }
 
-                        neighbour_sum += local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N - 2) % N]
-                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N - 1) % N]
-                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N) % N]
-                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N + 1) % N]
-                                         + local_patch[threadIdx.z + q - 2][threadIdx.x + l - 2][(j - 2 + N + 2) % N];
+                    neighbour_sum += local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N - 2) % N]
+                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N - 1) % N]
+                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N) % N]
+                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N + 1) % N]
+                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N + 2) % N]
+                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N - 2) % N]
+                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N - 1) % N]
+                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N) % N]
+                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N + 1) % N]
+                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N + 2) % N]
+                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N - 2) % N]
+                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N - 1) % N]
+                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N) % N]
+                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N + 1) % N]
+                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N + 2) % N]
+                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N - 2) % N]
+                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N - 1) % N]
+                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N) % N]
+                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N + 1) % N]
+                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N + 2) % N]
+                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N - 2) % N]
+                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N - 1) % N]
+                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N) % N]
+                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N + 1) % N]
+                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N + 2) % N];
 
-                    }
                 }
             }
             if (not_ghost) {
