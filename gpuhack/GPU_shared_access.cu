@@ -684,8 +684,8 @@ int main(int argc, char **argv) {
         } else {
             c_fail++;
             success = false;
-            if(aprIt.level() == aprIt.level_min()) {
-                if (c_fail < 1) {
+            if(aprIt.level() == aprIt.level_max()) {
+                if (c_fail < 50) {
                     std::cout << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
                               << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
                 }
@@ -1176,9 +1176,10 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     //set the boundary condition (zeros in this case)
 
+    local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
+    __syncthreads();
+
     if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
-        local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
-        __syncthreads();
 
         LOCALPATCHCONV(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
         //LOCALPATCHUPDATE(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,(y_num-1) % N);
@@ -1385,11 +1386,12 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
 
     }
 
+    local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
+    __syncthreads();
     //set the boundary condition (zeros in this case)
 
     if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
-        local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
-        __syncthreads();
+
 
         //LOCALPATCHUPDATE(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,(y_num-1) % N);
         LOCALPATCHCONV(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
@@ -1576,10 +1578,10 @@ __global__ void shared_update_min(const std::size_t *row_info,
 
     //set the boundary condition (zeros in this case)
 
-    if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
+    local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
+    __syncthreads();
 
-        local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
-        __syncthreads();
+    if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
 
         //LOCALPATCHUPDATE(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,(y_num-1) % N);
         LOCALPATCHCONV(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
