@@ -1146,13 +1146,12 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
 
         //Update steps for P->T
         //__syncthreads();
+
+
         //Check if its time to update the parent level
-
-
         if(j/2==(y_p)) {
             local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
             //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
-            //y_update_flag[j%2]=0;
         }
 
         //Check if its time to update current level
@@ -1163,6 +1162,12 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
         } else {
             y_update_flag[j%2]=0;
         }
+
+        //Check if its time to update child level
+        if(j==y_child) {
+            local_patch[threadIdx.z][threadIdx.x][y_child % N ] =  f_child; //initial update
+        }
+
 
         //update at current level
         if((y_l <= j) && ((particle_index_l+1) <particle_global_index_end)){
@@ -1177,6 +1182,15 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
             y_p= particle_y[particle_index_p];
             f_p = particle_data_input[particle_index_p];
         }
+
+
+        //update at child level
+        if((y_child <= j) && ((particle_index_child+1) <particle_global_index_end_child)){
+            particle_index_child++;
+            y_child= particle_y_child[particle_index_child];
+            f_child = particle_data_input_child[particle_index_child];
+        }
+
 
         __syncthreads();
         //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
