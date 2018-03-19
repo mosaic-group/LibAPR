@@ -296,9 +296,6 @@ public:
         std::size_t pcounter = 0;
 
 
-
-        uint64_t bundle_xzl=0;
-
         APRTimer timer;
         timer.verbose_flag = true;
 
@@ -311,7 +308,7 @@ public:
                 for (x = 0; x < aprIt.spatial_index_x_max(level); ++x) {
 
                     zx_counter++;
-                    uint64_t key;
+
                     if (aprIt.set_new_lzx(level, z, x) < UINT64_MAX) {
 
                         row_global_index.push_back(aprIt.particles_zx_end(level,z,x)); //This stores the begining and end global index for each level_xz_row

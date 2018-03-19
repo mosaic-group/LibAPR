@@ -435,10 +435,23 @@ int main(int argc, char **argv) {
     compareTreeIntensities(treeIt, newMaxDsTree, oldMaxDsTree);
 
     // Do mean downsampling on DenseRepresentation and old representation
+
+    APRTimer timer;
+    timer.verbose_flag = true;
+
+    timer.start_timer("mean downsampling");
+
     std::cout << "\nMean Downsampling on new dense representation.\n";
     ExtraParticleData<float> newMeanDsTree = meanDownsampling(apr, dr, drTree, aprTree);
+
+    timer.stop_timer();
+
+    timer.start_timer("mean downsampling old");
+
     std::cout << "Mean Downsampling on old representation.\n";
     ExtraParticleData<float> oldMeanDsTree = meanDownsamplingOld(apr, aprTree);
+    timer.stop_timer();
+
     // Check if old and new way give same result
     std::cout << "Compare.\n";
     compareTreeIntensities(treeIt, newMeanDsTree, oldMeanDsTree);

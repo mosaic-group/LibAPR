@@ -108,13 +108,85 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
 __global__ void shared_update_min(const std::size_t *row_info,
                                   const std::uint16_t *particle_y,
-                                  const std::uint16_t *particle_data_input,
-                                  std::uint16_t *particle_data_output,
                                   const std::size_t* level_offset,
+                                  const std::uint16_t *particle_data_input,
+                                  const std::size_t *row_info_child,
+                                  const std::uint16_t *particle_y_child,
+                                  const std::size_t* level_offset_child,
+                                  const std::float_t *particle_data_input_child,
+                                  std::uint16_t *particle_data_output,
                                   const std::uint16_t* level_x_num,
                                   const std::uint16_t* level_z_num,
                                   const std::uint16_t* level_y_num,
-                                  const std::size_t level);
+                                  const std::size_t level) ;
+
+__global__ void shared_update_interior_level(const std::size_t *row_info,
+                                             const std::uint16_t *particle_y,
+                                             const std::size_t* level_offset,
+                                             const std::uint16_t *particle_data_input,
+                                             const std::size_t *row_info_child,
+                                             const std::uint16_t *particle_y_child,
+                                             const std::size_t* level_offset_child,
+                                             const std::float_t *particle_data_input_child,
+                                             std::uint16_t *particle_data_output,
+                                             const std::uint16_t* level_x_num,
+                                             const std::uint16_t* level_z_num,
+                                             const std::uint16_t* level_y_num,
+                                             const std::size_t level);
+
+
+
+
+
+ExtraParticleData<float> meanDownsamplingOld(APR<uint16_t> &aInputApr, APRTree<uint16_t> &aprTree) {
+    APRIterator<uint16_t> aprIt(aInputApr);
+    APRTreeIterator<uint16_t> treeIt(aprTree);
+    APRTreeIterator<uint16_t> parentTreeIt(aprTree);
+    ExtraParticleData<float> outputTree(aprTree);
+    ExtraParticleData<uint8_t> childCnt(aprTree);
+    auto &intensities = aInputApr.particles_intensities;
+
+    for (unsigned int level = aprIt.level_max(); level >= aprIt.level_min(); --level) {
+        for (size_t particle_number = aprIt.particles_level_begin(level);
+             particle_number < aprIt.particles_level_end(level);
+             ++particle_number)
+        {
+            aprIt.set_iterator_to_particle_by_number(particle_number);
+            parentTreeIt.set_iterator_to_parent(aprIt);
+
+            auto val = intensities[aprIt];
+            outputTree[parentTreeIt] += val;
+            childCnt[parentTreeIt]++;
+        }
+    }
+
+    //then do the rest of the tree where order matters (it goes to level_min since we need to eventually average data there).
+    for (unsigned int level = treeIt.level_max(); level >= treeIt.level_min(); --level) {
+        // average intensities first
+        for (size_t particleNumber = treeIt.particles_level_begin(level);
+             particleNumber < treeIt.particles_level_end(level);
+             ++particleNumber)
+        {
+            treeIt.set_iterator_to_particle_by_number(particleNumber);
+            outputTree[treeIt] /= (1.0*childCnt[treeIt]);
+        }
+
+        // push changes
+        if (level > treeIt.level_min())
+            for (uint64_t parentNumber = treeIt.particles_level_begin(level);
+                 parentNumber < treeIt.particles_level_end(level);
+                 ++parentNumber)
+            {
+                treeIt.set_iterator_to_particle_by_number(parentNumber);
+                if (parentTreeIt.set_iterator_to_parent(treeIt)) {
+                    outputTree[parentTreeIt] += outputTree[treeIt];
+                    childCnt[parentTreeIt]++;
+                }
+            }
+    }
+    return outputTree;
+}
+
 
 ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
@@ -137,18 +209,32 @@ int main(int argc, char **argv) {
      * Set up the GPU Access data structures
      *
      */
-    // #TODO: Optimize this to now only load what I need, to reduce the memory footprint, also thrust free memory?
     GPUAPRAccess gpuaprAccess(aprIt);
-    //gpuaprAccess.initialize_gpu_access_alternate(apr);
-
 
     // Get dense representation of APR tree
+    timer.start_timer("gen tree");
     APRTree<uint16_t> aprTree(apr);
+    timer.stop_timer();
+
     APRTreeIterator<uint16_t> treeIt(aprTree);
 
     GPUAPRAccess gpuaprAccessTree(treeIt);
 
+    /*
+     *
+     *  Calculate the down-sampled Particle Values
+     *
+     *
+     */
 
+    timer.start_timer("generate ds particles");
+    ExtraParticleData<float> ds_parts =  meanDownsamplingOld(apr, aprTree);
+    timer.stop_timer();
+
+    std::cout << "Number parts: " << aprIt.total_number_particles() << " number in interior tree: " << ds_parts.data.size() << std::endl;
+
+
+    ds_parts.copy_data_to_gpu();
 
 
     /*
@@ -381,12 +467,39 @@ int main(int argc, char **argv) {
 
             if(level==apr.level_min()){
                 shared_update_min <<< blocks_l, threads_l >>>
-                                                 (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
+                                                 (gpuaprAccess.gpu_access.row_global_index,
+                                                         gpuaprAccess.gpu_access.y_part_coord,
+                                                         gpuaprAccess.gpu_access.level_offsets,
+                                                         apr.particles_intensities.gpu_pointer,
+                                                         gpuaprAccessTree.gpu_access.row_global_index,
+                                                         gpuaprAccessTree.gpu_access.y_part_coord,
+                                                         gpuaprAccessTree.gpu_access.level_offsets,
+                                                         ds_parts.gpu_pointer,
+                                                         spatial_info_test3.gpu_pointer,
+                                                         gpuaprAccess.gpu_access.level_x_num,
+                                                         gpuaprAccess.gpu_access.level_z_num,
+                                                         gpuaprAccess.gpu_access.level_y_num,
+                                                         level);
 
-            } else {
+            } else if(level==apr.level_max()) {
                 shared_update_max <<< blocks_l, threads_l >>>
                                                  (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
 
+            } else {
+                shared_update_interior_level <<< blocks_l, threads_l >>>
+                                                (gpuaprAccess.gpu_access.row_global_index,
+                                                        gpuaprAccess.gpu_access.y_part_coord,
+                                                        gpuaprAccess.gpu_access.level_offsets,
+                                                        apr.particles_intensities.gpu_pointer,
+                                                        gpuaprAccessTree.gpu_access.row_global_index,
+                                                        gpuaprAccessTree.gpu_access.y_part_coord,
+                                                        gpuaprAccessTree.gpu_access.level_offsets,
+                                                        ds_parts.gpu_pointer,
+                                                        spatial_info_test3.gpu_pointer,
+                                                        gpuaprAccess.gpu_access.level_x_num,
+                                                        gpuaprAccess.gpu_access.level_z_num,
+                                                        gpuaprAccess.gpu_access.level_y_num,
+                                                        level);
             }
             cudaDeviceSynchronize();
         }
@@ -893,25 +1006,33 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
 
 }
-__global__ void shared_update_min(const std::size_t *row_info,
-                                  const std::uint16_t *particle_y,
-                                  const std::uint16_t *particle_data_input,
-                                  std::uint16_t *particle_data_output,
-                                  const std::size_t* level_offset,
-                                  const std::uint16_t* level_x_num,
-                                  const std::uint16_t* level_z_num,
-                                  const std::uint16_t* level_y_num,
-                                  const std::size_t level)  {
 
+__global__ void shared_update_interior_level(const std::size_t *row_info,
+                                             const std::uint16_t *particle_y,
+                                             const std::size_t* level_offset,
+                                             const std::uint16_t *particle_data_input,
+                                             const std::size_t *row_info_child,
+                                             const std::uint16_t *particle_y_child,
+                                             const std::size_t* level_offset_child,
+                                             const std::float_t *particle_data_input_child,
+                                             std::uint16_t *particle_data_output,
+                                             const std::uint16_t* level_x_num,
+                                             const std::uint16_t* level_z_num,
+                                             const std::uint16_t* level_y_num,
+                                             const std::size_t level)  {
     /*
      *
-     *  Here we introduce updating Particle Cells at a level below.
+     *  Here we update both those Particle Cells at a level below and above.
      *
      */
 
     const int x_num = level_x_num[level];
     const int y_num = level_y_num[level];
     const int z_num = level_z_num[level];
+
+    const int x_num_p = level_x_num[level-1];
+    const int y_num_p = level_y_num[level-1];
+    const int z_num_p = level_z_num[level-1];
 
     const unsigned int N = 8;
     const unsigned int N_t = N+2;
@@ -948,9 +1069,205 @@ __global__ void shared_update_min(const std::size_t *row_info,
         return; //out of bounds
     }
 
+    int x_index_p = (8 * blockIdx.x + threadIdx.x - 1)/2;
+    int z_index_p = (8 * blockIdx.z + threadIdx.z - 1)/2;
+
 
     std::size_t current_row = level_offset[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
+    std::size_t current_row_p = level_offset[level-1] + (x_index_p) + (z_index_p)*x_num_p; // the input to each kernel is its chunk index for which it should iterate over
 
+    std::size_t particle_global_index_begin;
+    std::size_t particle_global_index_end;
+
+    std::size_t particle_global_index_begin_p;
+    std::size_t particle_global_index_end_p;
+
+    /*
+    * Current level variable initialization,
+    */
+
+    // current level
+    get_row_begin_end(&particle_global_index_begin, &particle_global_index_end, &current_row, row_info);
+    // parent level, level - 1, one resolution lower (coarser)
+    get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, &current_row_p, row_info);
+
+    std::size_t y_block = 1;
+    std::uint16_t y_update_flag[2] = {0};
+    std::size_t y_update_index[2] = {0};
+
+    //current level variables
+    std::size_t particle_index_l = particle_global_index_begin;
+    std::uint16_t y_l= particle_y[particle_index_l];
+    std::uint16_t f_l = particle_data_input[particle_index_l];
+
+    /*
+    * Parent level variable initialization,
+    */
+
+    //parent level variables
+    std::size_t particle_index_p = particle_global_index_begin_p;
+    std::uint16_t y_p= particle_y[particle_index_p];
+    std::uint16_t f_p = particle_data_input[particle_index_p];
+
+    /*
+    * Child level variable initialization, using 'Tree'
+    * This is the same row as the current level
+    */
+
+    std::size_t current_row_child = level_offset_child[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
+
+    std::size_t particle_global_index_begin_child;
+    std::size_t particle_global_index_end_child;
+
+    get_row_begin_end(&particle_global_index_begin_child, &particle_global_index_end_child, &current_row_child, row_info_child);
+
+    std::size_t particle_index_child = particle_global_index_begin_child;
+    std::uint16_t y_child= particle_y_child[particle_index_child];
+    std::float_t f_child = particle_data_input_child[particle_index_child];
+
+    if(particle_global_index_begin_child == particle_global_index_end_child){
+        y_child = y_num+1;//no particles don't do anything
+    }
+
+    if(particle_global_index_begin_p == particle_global_index_end_p){
+        y_p = y_num+1;//no particles don't do anything
+    }
+
+    if(particle_global_index_begin == particle_global_index_end){
+        y_l = y_num+1;//no particles don't do anything
+    }
+
+    //BOUNDARY CONDITIONS
+    local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
+
+    const int filter_offset = 1;
+
+    for (int j = 0; j < (y_num); ++j) {
+
+        //Update steps for P->T
+        //__syncthreads();
+        //Check if its time to update the parent level
+
+
+        if(j/2==(y_p)) {
+            local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
+            //local_patch[threadIdx.z][threadIdx.x][(2*y_p+1) % N ] =  f_p; //initial update
+            //y_update_flag[j%2]=0;
+        }
+
+        //Check if its time to update current level
+        if(j==y_l) {
+            local_patch[threadIdx.z][threadIdx.x][y_l % N ] =  f_l; //initial update
+            y_update_flag[j%2]=1;
+            y_update_index[j%2] = particle_index_l;
+        } else {
+            y_update_flag[j%2]=0;
+        }
+
+        //update at current level
+        if((y_l <= j) && ((particle_index_l+1) <particle_global_index_end)){
+            particle_index_l++;
+            y_l= particle_y[particle_index_l];
+            f_l = particle_data_input[particle_index_l];
+        }
+
+        //parent update loop
+        if((2*y_p <= j) && ((particle_index_p+1) <particle_global_index_end_p)){
+            particle_index_p++;
+            y_p= particle_y[particle_index_p];
+            f_p = particle_data_input[particle_index_p];
+        }
+
+        __syncthreads();
+        //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
+
+        if(y_update_flag[(j-filter_offset)%2]==1){
+            if(not_ghost) {
+                particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
+            }
+        }
+
+    }
+
+    //set the boundary condition (zeros in this case)
+
+    if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
+        local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
+        __syncthreads();
+        if(not_ghost) {
+            particle_data_output[particle_index_l] = local_patch[threadIdx.z][threadIdx.x][(y_num-1) % N];
+        }
+    }
+
+
+}
+
+
+__global__ void shared_update_min(const std::size_t *row_info,
+                                  const std::uint16_t *particle_y,
+                                  const std::size_t* level_offset,
+                                  const std::uint16_t *particle_data_input,
+                                  const std::size_t *row_info_child,
+                                  const std::uint16_t *particle_y_child,
+                                  const std::size_t* level_offset_child,
+                                  const std::float_t *particle_data_input_child,
+                                  std::uint16_t *particle_data_output,
+                                  const std::uint16_t* level_x_num,
+                                  const std::uint16_t* level_z_num,
+                                  const std::uint16_t* level_y_num,
+                                  const std::size_t level)  {
+
+    /*
+     *
+     *  Here we introduce updating Particle Cells at a level below.
+     *
+     */
+
+    const int x_num = level_x_num[level];
+    const int y_num = level_y_num[level];
+    const int z_num = level_z_num[level];
+
+    const unsigned int N = 8;
+
+    __shared__ int local_patch[10][10][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+
+    uint16_t y_cache[N]={0}; // These are local register/private caches
+    uint16_t index_cache[N]={0}; // These are local register/private caches
+
+    if(threadIdx.x >= 10){
+        return;
+    }
+    if(threadIdx.z >= 10){
+        return;
+    }
+
+
+    int x_index = (8 * blockIdx.x + threadIdx.x - 1);
+    int z_index = (8 * blockIdx.z + threadIdx.z - 1);
+
+
+    bool not_ghost=false;
+
+    if((threadIdx.x > 0) && (threadIdx.x < 9) && (threadIdx.z > 0) && (threadIdx.z < 9)){
+        not_ghost = true;
+    }
+
+
+    if((x_index >= x_num) || (x_index < 0)){
+        return; //out of bounds
+    }
+
+    if((z_index >= z_num) || (z_index < 0)){
+        return; //out of bounds
+    }
+
+
+    /*
+     * Current level variable initialization
+     *
+     */
+
+    std::size_t current_row = level_offset[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
 
@@ -966,6 +1283,32 @@ __global__ void shared_update_min(const std::size_t *row_info,
     std::uint16_t y_l= particle_y[particle_index_l];
     std::uint16_t f_l = particle_data_input[particle_index_l];
 
+    /*
+    * Child level variable initialization, using 'Tree'
+    * This is the same row as the current level
+    */
+
+    std::size_t current_row_child = level_offset_child[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
+
+    std::size_t particle_global_index_begin_child;
+    std::size_t particle_global_index_end_child;
+
+    get_row_begin_end(&particle_global_index_begin_child, &particle_global_index_end_child, &current_row_child, row_info_child);
+
+    std::size_t particle_index_child = particle_global_index_begin_child;
+    std::uint16_t y_child= particle_y_child[particle_index_child];
+    std::float_t f_child = particle_data_input_child[particle_index_child];
+
+
+
+    if(particle_global_index_begin_child == particle_global_index_end_child){
+        y_child = y_num+1;//no particles don't do anything
+    }
+
+    if(particle_global_index_begin == particle_global_index_end){
+        y_l = y_num+1;//no particles don't do anything
+    }
+
 
     //BOUNDARY CONDITIONS
     local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
@@ -976,6 +1319,12 @@ __global__ void shared_update_min(const std::size_t *row_info,
 
         //Update steps for P->T
 
+        /*
+         *
+         * Current Level Update
+         *
+         */
+
         //Check if its time to update current level
         if(j==y_l) {
             local_patch[threadIdx.z][threadIdx.x][y_l % N ] =  f_l; //initial update
@@ -985,12 +1334,30 @@ __global__ void shared_update_min(const std::size_t *row_info,
             y_update_flag[j%2]=0;
         }
 
-
         //update at current level
         if((y_l <= j) && ((particle_index_l+1) <particle_global_index_end)){
             particle_index_l++;
             y_l= particle_y[particle_index_l];
             f_l = particle_data_input[particle_index_l];
+        }
+
+        /*
+         *
+         * Child Level Update
+         *
+         */
+
+
+        //Check if its time to update current level
+        if(j==y_child) {
+            local_patch[threadIdx.z][threadIdx.x][y_child % N ] =  f_child; //initial update
+        }
+
+        //update at current level
+        if((y_child <= j) && ((particle_index_child+1) <particle_global_index_end_child)){
+            particle_index_child++;
+            y_child= particle_y_child[particle_index_child];
+            f_child = particle_data_input_child[particle_index_child];
         }
 
 
@@ -1020,8 +1387,6 @@ __global__ void shared_update_min(const std::size_t *row_info,
 
 
 }
-
-
 
 
 
