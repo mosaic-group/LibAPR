@@ -705,17 +705,17 @@ int main(int argc, char **argv) {
 
 
 
-    MeshData<uint16_t> check_mesh;
-
-    apr.interp_img(check_mesh,spatial_info_test3);
-
-    std::string image_file_name = options.directory +  "conv3_gpu.tif";
-    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
-
-    apr.interp_img(check_mesh,output);
-
-    image_file_name = options.directory +  "conv3_gt.tif";
-    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
+//    MeshData<uint16_t> check_mesh;
+//
+//    apr.interp_img(check_mesh,spatial_info_test3);
+//
+//    std::string image_file_name = options.directory +  "conv3_gpu.tif";
+//    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
+//
+//    apr.interp_img(check_mesh,output);
+//
+//    image_file_name = options.directory +  "conv3_gt.tif";
+//    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
 
 
 
