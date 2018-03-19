@@ -583,6 +583,7 @@ int main(int argc, char **argv) {
     ExtraParticleData<uint16_t> spatial_info_test3(apr);
     spatial_info_test3.init_gpu(apr.total_number_particles());
 
+    cudaDeviceSynchronize();
 
     timer.start_timer("summing the sptial informatino for each partilce on the GPU");
     for (int rep = 0; rep < number_reps; ++rep) {
@@ -673,7 +674,7 @@ int main(int argc, char **argv) {
         c_pass = 0;
     c_fail = 0;
     success=true;
-
+    uint64_t output_c=0;
 
     for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
         //This step is required for all loops to set the iterator by the particle number
@@ -684,12 +685,15 @@ int main(int argc, char **argv) {
         } else {
             c_fail++;
             success = false;
-            if(aprIt.level() == aprIt.level_max()) {
-                if (c_fail < 50) {
-                    std::cout << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
+            if(aprIt.level() <= aprIt.level_max()) {
+                if (output_c < 20) {
+                    std::cout << "Expected: " << output[aprIt] << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
                               << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
+                    output_c++;
                 }
+                //spatial_info_test3[aprIt] = 0;
             }
+
         }
     }
 
@@ -1005,16 +1009,19 @@ if (not_ghost) {\
 
 #define LOCALPATCHCONV(particle_output,index,z,x,y,neighbour_sum)\
 neighbour_sum=0;\
-for (int q = -(1); q < 2; ++q) {\
-    for (int l = -(1); l < 2; ++l) {\
+for (int q = 0; q < 3; ++q) {\
+    for (int l = 0; l < 3; ++l) {\
         if (not_ghost) {\
-            neighbour_sum += local_patch[z + q][x + l][(y+N)%N]\
-                 + local_patch[z + q][x + l][(y+N-1)%N]\
-                 + local_patch[z + q][x + l][(y+N+1)%N];\
+            neighbour_sum += local_patch[z + q - 1][x + l - 1][(y+N)%N]\
+                 + local_patch[z + q - 1][x + l - 1][(y+N-1)%N]\
+                 + local_patch[z + q - 1][x + l - 1][(y+N+1)%N];\
         }\
     }\
 }\
+ if (not_ghost) {\
 particle_output[index] = std::round(neighbour_sum / 27.0f);\
+}\
+
 
 
 
@@ -1069,16 +1076,31 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
 
     if((x_index >= x_num) || (x_index < 0)){
+        local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
+        local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
     if((z_index >= z_num) || (z_index < 0)){
+        local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
+        local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
-    int x_index_p = (8 * blockIdx.x + threadIdx.x - 1)/2;
-    int z_index_p = (8 * blockIdx.z + threadIdx.z - 1)/2;
-
+    int x_index_p = (x_index)/2;
+    int z_index_p = (z_index)/2;
 
     std::size_t current_row = level_offset[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
     std::size_t current_row_p = level_offset[level-1] + (x_index_p) + (z_index_p)*x_num_p; // the input to each kernel is its chunk index for which it should iterate over
@@ -1133,10 +1155,11 @@ __global__ void shared_update_max(const std::size_t *row_info,
         //Check if its time to update the parent level
 
 
-        if(j/2==(y_p)) {
+        if(j==(2*y_p)) {
             local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
-
+            local_patch[threadIdx.z][threadIdx.x][(j+1) % N ] =  f_p;
         }
+
 
         //Check if its time to update current level
         if(j==y_l) {
@@ -1244,10 +1267,28 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
 
 
     if((x_index >= x_num) || (x_index < 0)){
+        //set the whole buffer to the boundary condition
+        local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
+        local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
     if((z_index >= z_num) || (z_index < 0)){
+        //set the whole buffer to the zero boundary condition
+        local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
+        local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
@@ -1320,7 +1361,7 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
     }
 
     //BOUNDARY CONDITIONS
-    local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
+    local_patch[threadIdx.z][threadIdx.x][(N-1)%N] = 0; //this is at (y-1)
 
     const int filter_offset = 1;
     double neighbour_sum = 0;
@@ -1328,12 +1369,16 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
     for (int j = 0; j < (y_num); ++j) {
 
         //Update steps for P->T
-        __syncthreads();
-
 
         //Check if its time to update the parent level
-        if(j/2==(y_p)) {
+        if(j==(2*y_p)) {
             local_patch[threadIdx.z][threadIdx.x][(j) % N ] =  f_p; //initial update
+            local_patch[threadIdx.z][threadIdx.x][(j+1) % N ] =  f_p;
+        }
+
+        //Check if its time to update child level
+        if(j==y_child) {
+            local_patch[threadIdx.z][threadIdx.x][y_child % N ] =  f_child; //initial update
         }
 
         //Check if its time to update current level
@@ -1343,11 +1388,6 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
             y_update_index[j%2] = particle_index_l;
         } else {
             y_update_flag[j%2]=0;
-        }
-
-        //Check if its time to update child level
-        if(j==y_child) {
-            local_patch[threadIdx.z][threadIdx.x][y_child % N ] =  f_child; //initial update
         }
 
 
@@ -1382,7 +1422,7 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
             LOCALPATCHCONV(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
         }
-
+        __syncthreads();
 
     }
 
@@ -1455,10 +1495,26 @@ __global__ void shared_update_min(const std::size_t *row_info,
 
 
     if((x_index >= x_num) || (x_index < 0)){
+        local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
+        local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
     if((z_index >= z_num) || (z_index < 0)){
+        local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
+        local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
         return; //out of bounds
     }
 
