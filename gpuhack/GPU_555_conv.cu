@@ -416,40 +416,40 @@ int main(int argc, char **argv) {
             dim3 blocks_l(x_blocks, 1, z_blocks);
 
             if(level==apr.level_min()){
-//                shared_update_min <<< blocks_l, threads_l >>>
-//                                                (gpuaprAccess.gpu_access.row_global_index,
-//                                                        gpuaprAccess.gpu_access.y_part_coord,
-//                                                        gpuaprAccess.gpu_access.level_offsets,
-//                                                        apr.particles_intensities.gpu_pointer,
-//                                                        gpuaprAccessTree.gpu_access.row_global_index,
-//                                                        gpuaprAccessTree.gpu_access.y_part_coord,
-//                                                        gpuaprAccessTree.gpu_access.level_offsets,
-//                                                        ds_parts.gpu_pointer,
-//                                                        spatial_info_test3.gpu_pointer,
-//                                                        gpuaprAccess.gpu_access.level_x_num,
-//                                                        gpuaprAccess.gpu_access.level_z_num,
-//                                                        gpuaprAccess.gpu_access.level_y_num,
-//                                                        level);
+                shared_update_min <<< blocks_l, threads_l >>>
+                                                (gpuaprAccess.gpu_access.row_global_index,
+                                                        gpuaprAccess.gpu_access.y_part_coord,
+                                                        gpuaprAccess.gpu_access.level_offsets,
+                                                        apr.particles_intensities.gpu_pointer,
+                                                        gpuaprAccessTree.gpu_access.row_global_index,
+                                                        gpuaprAccessTree.gpu_access.y_part_coord,
+                                                        gpuaprAccessTree.gpu_access.level_offsets,
+                                                        ds_parts.gpu_pointer,
+                                                        spatial_info_test3.gpu_pointer,
+                                                        gpuaprAccess.gpu_access.level_x_num,
+                                                        gpuaprAccess.gpu_access.level_z_num,
+                                                        gpuaprAccess.gpu_access.level_y_num,
+                                                        level);
 
             } else if(level==apr.level_max()) {
                 shared_update_max <<< blocks_l, threads_l >>>
                                                 (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
 
             } else {
-                //shared_update_interior_level <<< blocks_l, threads_l >>>
-//                                                           (gpuaprAccess.gpu_access.row_global_index,
-//                                                                   gpuaprAccess.gpu_access.y_part_coord,
-//                                                                   gpuaprAccess.gpu_access.level_offsets,
-//                                                                   apr.particles_intensities.gpu_pointer,
-//                                                                   gpuaprAccessTree.gpu_access.row_global_index,
-//                                                                   gpuaprAccessTree.gpu_access.y_part_coord,
-//                                                                   gpuaprAccessTree.gpu_access.level_offsets,
-//                                                                   ds_parts.gpu_pointer,
-//                                                                   spatial_info_test3.gpu_pointer,
-//                                                                   gpuaprAccess.gpu_access.level_x_num,
-//                                                                   gpuaprAccess.gpu_access.level_z_num,
-//                                                                   gpuaprAccess.gpu_access.level_y_num,
-//                                                                   level);
+                shared_update_interior_level <<< blocks_l, threads_l >>>
+                                                           (gpuaprAccess.gpu_access.row_global_index,
+                                                                   gpuaprAccess.gpu_access.y_part_coord,
+                                                                   gpuaprAccess.gpu_access.level_offsets,
+                                                                   apr.particles_intensities.gpu_pointer,
+                                                                   gpuaprAccessTree.gpu_access.row_global_index,
+                                                                   gpuaprAccessTree.gpu_access.y_part_coord,
+                                                                   gpuaprAccessTree.gpu_access.level_offsets,
+                                                                   ds_parts.gpu_pointer,
+                                                                   spatial_info_test3.gpu_pointer,
+                                                                   gpuaprAccess.gpu_access.level_x_num,
+                                                                   gpuaprAccess.gpu_access.level_z_num,
+                                                                   gpuaprAccess.gpu_access.level_y_num,
+                                                                   level);
             }
             cudaDeviceSynchronize();
         }
@@ -555,18 +555,35 @@ if (not_ghost) {\
 
 #define LOCALPATCHCONV(particle_output,index,z,x,y,neighbour_sum)\
 neighbour_sum=0;\
+if (not_ghost) {\
 for (int q = 0; q < 5; ++q) {\
-    for (int l = 0; l < 5; ++l) {\
-        if (not_ghost) {\
-            neighbour_sum += local_patch[z + q - 2][x + l - 2][(y+N-2)%N]\
-                 + local_patch[z + q - 2][x + l - 2][(y+N-1)%N]\
-                 + local_patch[z + q - 2][x + l - 2][(y+N)%N]\
-                 + local_patch[z + q - 2][x + l - 2][(y+N+1)%N]\
-                 + local_patch[z + q - 2][x + l - 2][(y+N+2)%N];\
-        }\
-    }\
+            neighbour_sum +=\
+                local_patch[z + q - 2][x + 0 - 2][(y+N-2)%N]\
+                 + local_patch[z + q - 2][x + 0 - 2][(y+N-1)%N]\
+                 + local_patch[z + q - 2][x + 0 - 2][(y+N)%N]\
+                 + local_patch[z + q - 2][x + 0 - 2][(y+N+1)%N]\
+                 + local_patch[z + q - 2][x + 0 - 2][(y+N+2)%N]\
+                 + local_patch[z + q - 2][x + 1 - 2][(y+N-2)%N]\
+                 + local_patch[z + q - 2][x + 1 - 2][(y+N-1)%N]\
+                 + local_patch[z + q - 2][x + 1 - 2][(y+N)%N]\
+                 + local_patch[z + q - 2][x + 1 - 2][(y+N+1)%N]\
+                 + local_patch[z + q - 2][x + 1 - 2][(y+N+2)%N]\
+                + local_patch[z + q - 2][x + 2 - 2][(y+N-2)%N]\
+                 + local_patch[z + q - 2][x + 2 - 2][(y+N-1)%N]\
+                 + local_patch[z + q - 2][x + 2 - 2][(y+N)%N]\
+                 + local_patch[z + q - 2][x + 2 - 2][(y+N+1)%N]\
+                 + local_patch[z + q - 2][x + 2 - 2][(y+N+2)%N]\
+                + local_patch[z + q - 2][x + 3 - 2][(y+N-2)%N]\
+                 + local_patch[z + q - 2][x + 3 - 2][(y+N-1)%N]\
+                 + local_patch[z + q - 2][x + 3 - 2][(y+N)%N]\
+                 + local_patch[z + q - 2][x + 3 - 2][(y+N+1)%N]\
+                 + local_patch[z + q - 2][x + 3 - 2][(y+N+2)%N]\
+                + local_patch[z + q - 2][x + 4 - 2][(y+N-2)%N]\
+                 + local_patch[z + q - 2][x + 4 - 2][(y+N-1)%N]\
+                 + local_patch[z + q - 2][x + 4 - 2][(y+N)%N]\
+                 + local_patch[z + q - 2][x + 4 - 2][(y+N+1)%N]\
+                 + local_patch[z + q - 2][x + 4 - 2][(y+N+2)%N];\
 }\
- if (not_ghost) {\
 particle_output[index] = std::round(neighbour_sum / 27.0f);\
 }\
 
@@ -733,12 +750,12 @@ __global__ void shared_update_max(const std::size_t *row_info,
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
             //particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
 
-            //LOCALPATCHCONV(particle_data_output,y_update_index[(j+3-filter_offset)%3],threadIdx.z,threadIdx.x,j-2,neighbour_sum);
+            LOCALPATCHCONV(particle_data_output,y_update_index[(j+3-filter_offset)%3],threadIdx.z,threadIdx.x,j-2,neighbour_sum);
 
-            if (not_ghost) {
-                neighbour_sum = 0;
-#pragma unroll
-                for (int q = 0; q < 5; ++q) {
+//            if (not_ghost) {
+//                neighbour_sum = 0;
+//#pragma unroll
+//                for (int q = 0; q < 5; ++q) {
 //#pragma unroll
 //                    for (int l = 0; l < 5; ++l) {
 //
@@ -750,37 +767,37 @@ __global__ void shared_update_max(const std::size_t *row_info,
 //
 //                    }
 
-                    neighbour_sum += local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N - 2) % N]
-                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N - 1) % N]
-                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N) % N]
-                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N + 1) % N]
-                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N + 2) % N]
-                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N - 2) % N]
-                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N - 1) % N]
-                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N) % N]
-                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N + 1) % N]
-                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N + 2) % N]
-                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N - 2) % N]
-                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N - 1) % N]
-                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N) % N]
-                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N + 1) % N]
-                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N + 2) % N]
-                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N - 2) % N]
-                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N - 1) % N]
-                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N) % N]
-                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N + 1) % N]
-                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N + 2) % N]
-                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N - 2) % N]
-                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N - 1) % N]
-                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N) % N]
-                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N + 1) % N]
-                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N + 2) % N];
-
-                }
-            }
-            if (not_ghost) {
-                 particle_data_output[y_update_index[(j+3-filter_offset)%3]] = std::round(neighbour_sum / 27.0f);
-            }
+//                    neighbour_sum += local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N - 2) % N]
+//                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N - 1) % N]
+//                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N) % N]
+//                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N + 1) % N]
+//                                     + local_patch[threadIdx.z + q - 2][threadIdx.x + 0 - 2][(j - 2 + N + 2) % N]
+//                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N - 2) % N]
+//                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N - 1) % N]
+//                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N) % N]
+//                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N + 1) % N]
+//                    + local_patch[threadIdx.z + q - 2][threadIdx.x + 1 - 2][(j - 2 + N + 2) % N]
+//                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N - 2) % N]
+//                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N - 1) % N]
+//                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N) % N]
+//                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N + 1) % N]
+//                      + local_patch[threadIdx.z + q - 2][threadIdx.x + 2 - 2][(j - 2 + N + 2) % N]
+//                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N - 2) % N]
+//                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N - 1) % N]
+//                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N) % N]
+//                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N + 1) % N]
+//                        + local_patch[threadIdx.z + q - 2][threadIdx.x + 3 - 2][(j - 2 + N + 2) % N]
+//                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N - 2) % N]
+//                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N - 1) % N]
+//                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N) % N]
+//                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N + 1) % N]
+//                          + local_patch[threadIdx.z + q - 2][threadIdx.x + 4 - 2][(j - 2 + N + 2) % N];
+//
+//                }
+//            }
+//            if (not_ghost) {
+//                 particle_data_output[y_update_index[(j+3-filter_offset)%3]] = std::round(neighbour_sum / 27.0f);
+//            }
 
 
         }
@@ -829,10 +846,10 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const unsigned int N = 8;
+    const unsigned int N = 5;
     const unsigned int N_t = N+2;
 
-    __shared__ std::float_t local_patch[12][12][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::float_t local_patch[12][12][5]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
@@ -863,9 +880,7 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
@@ -876,9 +891,7 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
@@ -1058,9 +1071,9 @@ __global__ void shared_update_min(const std::size_t *row_info,
     const int y_num = level_y_num[level];
     const int z_num = level_z_num[level];
 
-    const unsigned int N = 8;
+    const unsigned int N = 5;
 
-    __shared__ std::float_t local_patch[12][12][8]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::float_t local_patch[12][12][5]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
@@ -1090,9 +1103,7 @@ __global__ void shared_update_min(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
@@ -1102,9 +1113,7 @@ __global__ void shared_update_min(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][6 ] = 0;
-        local_patch[threadIdx.z][threadIdx.x][7 ] = 0;
+
         return; //out of bounds
     }
 
