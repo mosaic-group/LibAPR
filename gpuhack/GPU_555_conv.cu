@@ -645,6 +645,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
 
         return; //out of bounds
     }
@@ -655,6 +656,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][4 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][5 ] = 0;
         return; //out of bounds
     }
 
