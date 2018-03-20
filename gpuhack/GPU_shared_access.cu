@@ -659,6 +659,7 @@ int main(int argc, char **argv) {
     std::cout << "Average time for loop conv: " << (gpu_iterate_time_si2/(number_reps*1.0f))*1000 << " ms" << std::endl;
     std::cout << "Average time for loop insert: " << (gpu_iterate_time_si/(number_reps*1.0f))*1000 << " ms" << std::endl;
     std::cout << "Average time for loop insert max: " << (gpu_iterate_time_si3/(number_reps*1.0f))*1000 << " ms" << std::endl;
+    std::cout << "Average time for loop insert max per million: " << (gpu_iterate_time_si3/(number_reps*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
 
     //////////////////////////
     ///

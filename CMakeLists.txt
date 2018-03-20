@@ -127,7 +127,7 @@ if(APR_USE_CUDA)
     list(APPEND CUDA_NVCC_FLAGS "-std=c++14")
     list(APPEND CUDA_NVCC_FLAGS ${ARCH_FLAGS})
 
-    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -use_fast_math")
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -use_fast_math -Xptxas -O3,-v")
 
     cuda_add_library(${CUDA_APR_TARGET} STATIC src/algorithm/number.cu)
     target_link_libraries(${CUDA_APR_TARGET} ${CUDA_LIBRARIES})

@@ -464,6 +464,7 @@ int main(int argc, char **argv) {
     spatial_info_test3.gpu_data.shrink_to_fit();
 
     std::cout << "Average time for loop insert max: " << (gpu_iterate_time_si3/(number_reps*1.0f))*1000 << " ms" << std::endl;
+    std::cout << "Average time for loop insert max per million particles: " << (gpu_iterate_time_si3/(apr.total_number_particles()*number_reps*1.0f))*1000*1000000.0f << " ms" << std::endl;
 
     //////////////////////////
     ///

@@ -42,169 +42,149 @@ bool command_option_exists(char **begin, char **end, const std::string &option);
 
 char* get_command_option(char **begin, char **end, const std::string &option);
 
+template<typename U,typename V>
+float pixels_linear_neighbour_access_openmp(uint64_t y_num,uint64_t x_num,uint64_t z_num,float num_repeats,int stencil_half){
+    //
+    //  Compute two, comparitive filters for speed. Original size img, and current particle size comparison
+    //
 
-template<typename T,typename ParticleDataType>
-void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,MeshData<T>& temp_vec,ExtraParticleData<ParticleDataType>& particleData){
+    MeshData<U> input_data;
+    MeshData<V> output_data;
+    input_data.init((int)y_num,(int)x_num,(int)z_num,23);
+    output_data.init((int)y_num,(int)x_num,(int)z_num,0);
 
-    uint64_t x;
+    APRTimer timer;
+    timer.verbose_flag = false;
+    timer.start_timer("full pixel neighbour access");
 
-    const uint64_t x_num_m = temp_vec.x_num;
-    const uint64_t y_num_m =  temp_vec.y_num;
+    int j = 0;
+    int k = 0;
+    int i = 0;
 
+    int j_n = 0;
+    int k_n = 0;
+    int i_n = 0;
 
-#ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
-#endif
-    for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
+    //float neigh_sum = 0;
 
-        //
-        //  This loop recreates particles at the current level, using a simple copy
-        //
-
-        uint64_t mesh_offset = (x+1)*y_num_m + x_num_m*y_num_m*(z % 3);
-
-        apr_iterator.set_new_lzx(level, z, x);
-        for (unsigned long gap = 0;
-             gap < apr_iterator.number_gaps(); apr_iterator.move_gap(gap)) {
-
-            uint64_t y_begin = apr_iterator.current_gap_y_begin()+1;
-            uint64_t y_end =apr_iterator.current_gap_y_end()+1;
-            uint64_t index =apr_iterator.current_gap_index();
-
-            std::copy(particleData.data.begin() + index,particleData.data.begin() + index + (y_end - y_begin) + 1,temp_vec.mesh.begin() + mesh_offset + y_begin );
-
-
-        }
-
-    }
-
-    if(level > apr_iterator.level_min()) {
-        const int y_num = apr_iterator.spatial_index_y_max(level);
-
-        //
-        //  This loop interpolates particles at a lower level (Larger Particle Cell or resolution), by simple uploading
-        //
+    for(int r = 0;r < num_repeats;r++){
 
 #ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
+#pragma omp parallel for default(shared) private(j,i,k,i_n,k_n,j_n)
 #endif
-        for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
-
-            for (apr_iterator.set_new_lzx(level - 1, z / 2, x / 2);
-                 apr_iterator.global_index() < apr_iterator.particles_zx_end(level - 1, z / 2,
-                                                                             x /
-                                                                             2); apr_iterator.set_iterator_to_particle_next_particle()) {
-
-                int y_m = std::min(2 * apr_iterator.y() + 2,y_num);
-
-                temp_vec.at(2 * apr_iterator.y()+1, x + 1, z % 3) = particleData[apr_iterator];
-
-                temp_vec.at(y_m, x + 1, z % 3) = particleData[apr_iterator];
+        for(j = 0; j < z_num;j++){
+            for(i = 0; i < x_num;i++){
+                for(k = 0;k < y_num;k++){
+                    double neigh_sum = 0;
 
 
-            }
+                    for (int l = -stencil_half; l < stencil_half+1; ++l) {
+                        for (int q = -stencil_half; q < stencil_half+1; ++q) {
+                            for (int w = -stencil_half; w < stencil_half+1; ++w) {
 
-        }
-    }
+                                j_n = j + l;
+                                i_n = i + q;
+                                k_n = k + w;
 
-    if(level < apr_iterator.level_max()) {
+                                if((i_n >=0) & (i_n < x_num) ){
+                                    if((j_n >=0) & (j_n < z_num) ){
+                                        if((k_n >=0) & (k_n < y_num) ){
+                                            neigh_sum += input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
 
-        //
-        //  This is an interpolating from higher resolution particles to lower, if it was full this would be the simply average
-        //  of the 8 children particle cells.
-        //
-        //  However, there are not always 8 children nodes, therefore we need to keep track of the number of children.
-        //
+                                        }
+                                    }
+                                }
 
-        const uint64_t z_num_us =  apr_iterator.spatial_index_z_max(level+1);
-        const uint64_t x_num_us =  apr_iterator.spatial_index_x_max(level+1);
-
-        int x_ds=0;
-
-#ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(x_ds) firstprivate(apr_iterator)
-#endif
-        for (x_ds = 0; x_ds < apr.spatial_index_x_max(level); ++x_ds) {
-
-            std::vector<uint8_t> curr_counter;
-            curr_counter.resize(y_num_m,0);
-
-            for (int i = 0; i < 2; ++i) {
-
-                int x = 2*x_ds + i;
-
-                if ((x) < x_num_us) {
-
-                    for (apr_iterator.set_new_lzx(level + 1, 2 * z, x);
-                         apr_iterator.global_index() < apr_iterator.particles_zx_end(level + 1, 2 * z,
-                                                                                     x); apr_iterator.set_iterator_to_particle_next_particle()) {
-
-                        temp_vec.at(apr_iterator.y() / 2 + 1, x / 2 + 1, z % 3) =
-                                (1.0f * curr_counter[apr_iterator.y() / 2] *
-                                 temp_vec.at(apr_iterator.y() / 2 + 1, x / 2 + 1, z % 3) +
-                                 particleData[apr_iterator]) /
-                                (1.0f * (curr_counter[apr_iterator.y() / 2]) + 1.0f);
-
-                        curr_counter[apr_iterator.y() / 2]++;
-                    }
-                    if ((2 * z + 1) < z_num_us) {
-                        for (apr_iterator.set_new_lzx(level + 1, 2 * z + 1, x);
-                             apr_iterator.global_index() < apr_iterator.particles_zx_end(level + 1, 2 * z + 1,
-                                                                                         x); apr_iterator.set_iterator_to_particle_next_particle()) {
-
-                            temp_vec.at(apr_iterator.y() / 2 + 1, x / 2 + 1, z % 3) =
-                                    (1.0f * curr_counter[apr_iterator.y() / 2] *
-                                     temp_vec.at(apr_iterator.y() / 2 + 1, x / 2 + 1, z % 3) +
-                                     particleData[apr_iterator]) /
-                                    (1.0f * curr_counter[apr_iterator.y() / 2] +
-                                     1.0f);
-                            curr_counter[apr_iterator.y() / 2]++;
-
+                            }
                         }
                     }
+
+                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::round(neigh_sum/(1.0f*pow(stencil_half*2+1,3)));
+
                 }
             }
-
         }
 
+    }
 
-//#ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(guided) private(x) firstprivate(apr_iterator)
-//#endif
-//        for (x = 0; x < apr.spatial_index_x_max(level+1); ++x) {
-//
-//            for (apr_iterator.set_new_lzx(level + 1, 2 * z, x);
-//                 apr_iterator.global_index() < apr_iterator.particles_zx_end(level + 1, 2 * z,
-//                                                                             x); apr_iterator.set_iterator_to_particle_next_particle()) {
-//
-//                    temp_vec.at(apr_iterator.y() / 2 + 1, x / 2 + 1, z % 3) +=
-//                            apr.particles_intensities[apr_iterator] * (1.0 / 8.0f);
-//
-//
-//            }
-//
-//        }
-//
-//        if((2*z + 1) < z_num_us){
-//#ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(guided) private(x) firstprivate(apr_iterator)
-//#endif
-//            for (x = 0; x < apr.spatial_index_x_max(level + 1); ++x) {
-//
-//                for (apr_iterator.set_new_lzx(level + 1, 2 * z + 1, x);
-//                     apr_iterator.global_index() < apr_iterator.particles_zx_end(level + 1, 2 * z + 1,
-//                                                                                 x); apr_iterator.set_iterator_to_particle_next_particle()) {
-//                    temp_vec.at(apr_iterator.y() / 2 + 1, x / 2 + 1, z % 3) += apr.particles_intensities[apr_iterator]*(1.0f/8.0f);
-//
-//                }
-//
-//            }
-//        }
+    timer.stop_timer();
+    float elapsed_seconds = timer.t2 - timer.t1;
+    float time = elapsed_seconds/num_repeats;
+
+    return (time);
+
+}
+template<typename U,typename V>
+float pixels_linear_neighbour_access_serial(uint64_t y_num,uint64_t x_num,uint64_t z_num,float num_repeats,int stencil_half){
+    //
+    //  Compute two, comparitive filters for speed. Original size img, and current particle size comparison
+    //
+
+    MeshData<U> input_data;
+    MeshData<V> output_data;
+    input_data.init((int)y_num,(int)x_num,(int)z_num,23);
+    output_data.init((int)y_num,(int)x_num,(int)z_num,0);
+
+    APRTimer timer;
+    timer.verbose_flag = false;
+    timer.start_timer("full pixel neighbour access");
+
+    int j = 0;
+    int k = 0;
+    int i = 0;
+
+    int j_n = 0;
+    int k_n = 0;
+    int i_n = 0;
+
+    //float neigh_sum = 0;
+
+    for(int r = 0;r < num_repeats;r++) {
+
+        for (j = 0; j < z_num; j++) {
+            for (i = 0; i < x_num; i++) {
+                for (k = 0; k < y_num; k++) {
+                    double neigh_sum = 0;
+
+
+                    for (int l = -stencil_half; l < stencil_half + 1; ++l) {
+                        for (int q = -stencil_half; q < stencil_half + 1; ++q) {
+                            for (int w = -stencil_half; w < stencil_half + 1; ++w) {
+
+                                j_n = j + l;
+                                i_n = i + q;
+                                k_n = k + w;
+
+                                if ((i_n >= 0) & (i_n < x_num)) {
+                                    if ((j_n >= 0) & (j_n < z_num)) {
+                                        if ((k_n >= 0) & (k_n < y_num)) {
+                                            neigh_sum += input_data.mesh[j_n * x_num * y_num + i_n * y_num + k_n];
+
+                                        }
+                                    }
+                                }
+
+                            }
+                        }
+                    }
+
+                    output_data.mesh[j * x_num * y_num + i * y_num + k] = std::round(
+                            neigh_sum / (1.0f * pow(stencil_half * 2 + 1, 3)));
+
+                }
+            }
+        }
     }
 
 
-}
 
+    timer.stop_timer();
+    float elapsed_seconds = timer.t2 - timer.t1;
+    float time = elapsed_seconds/num_repeats;
+
+    return (time);
+
+}
 
 
 
@@ -237,8 +217,28 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> neighbour_iterator(apr);
     APRIterator<uint16_t> apr_iterator(apr);
 
+    unsigned int number_repeats = 10;
+    pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
 
+    float time_pixels333 = pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
 
+    std::cout << "Pixel filter 333 (OpenMP) took: " << time_pixels333*1000 << " ms" << std::endl;
+    std::cout << "Pixel filter 333 (OpenMP) per-million pixels: " << 1000*(time_pixels333*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
+
+    float time_pixels555 = pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,2);
+
+    std::cout << "Pixel filter 555 (OpenMP) took: " << time_pixels555*1000 << " ms" << std::endl;
+    std::cout << "Pixel filter 555 (OpenMP) per-million pixels: " << 1000*(time_pixels555*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
+
+    float time_pixels333s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
+
+    std::cout << "Pixel filter 333 (serial) took: " << time_pixels333s*1000 << " ms" << std::endl;
+    std::cout << "Pixel filter 333 (serial) per-million pixels: " << 1000*(time_pixels333s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
+
+    float time_pixels555s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,2);
+
+    std::cout << "Pixel filter 555 (serial) took: " << time_pixels555s*1000 << " ms" << std::endl;
+    std::cout << "Pixel filter 555 (serial) per-million pixels: " << 1000*(time_pixels555s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
 
 }
 
