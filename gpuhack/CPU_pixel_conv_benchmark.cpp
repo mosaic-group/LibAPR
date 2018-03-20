@@ -66,40 +66,35 @@ float pixels_linear_neighbour_access_openmp(uint64_t y_num,uint64_t x_num,uint64
     int i_n = 0;
 
     //float neigh_sum = 0;
+    float norm = pow(stencil_half*2+1,3);
 
     for(int r = 0;r < num_repeats;r++){
 
 #ifdef HAVE_OPENMP
 #pragma omp parallel for default(shared) private(j,i,k,i_n,k_n,j_n)
 #endif
-        for(j = 0; j < z_num;j++){
-            for(i = 0; i < x_num;i++){
-                for(k = 0;k < y_num;k++){
+        for(j = 0; j < (z_num);j++){
+            for(i = 0; i < (x_num);i++){
+                for(k = 0;k < (y_num);k++){
                     double neigh_sum = 0;
 
+                    int min_j = std::max(0,j-stencil_half);
+                    int min_i = std::max(0,i-stencil_half);
+                    int min_k = std::max(0,k-stencil_half);
 
-                    for (int l = -stencil_half; l < stencil_half+1; ++l) {
-                        for (int q = -stencil_half; q < stencil_half+1; ++q) {
-                            for (int w = -stencil_half; w < stencil_half+1; ++w) {
+                    int max_j = std::min((int)z_num-1,j+stencil_half);
+                    int max_i = std::min((int)x_num-1,i+stencil_half);
+                    int max_k = std::min((int)y_num-1,k+stencil_half);
 
-                                j_n = j + l;
-                                i_n = i + q;
-                                k_n = k + w;
-
-                                if((i_n >=0) & (i_n < x_num) ){
-                                    if((j_n >=0) & (j_n < z_num) ){
-                                        if((k_n >=0) & (k_n < y_num) ){
-                                            neigh_sum += input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
-
-                                        }
-                                    }
-                                }
-
+                    for (int j_n = min_j; j_n < max_j+1; ++j_n) {
+                        for (int i_n = min_i; i_n < max_i+1; ++i_n) {
+                            for (int k_n = min_k; k_n < max_k+1; ++k_n) {
+                                neigh_sum += input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
                             }
                         }
                     }
 
-                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::round(neigh_sum/(1.0f*pow(stencil_half*2+1,3)));
+                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::round(neigh_sum/norm);
 
                 }
             }
@@ -138,44 +133,38 @@ float pixels_linear_neighbour_access_serial(uint64_t y_num,uint64_t x_num,uint64
     int i_n = 0;
 
     //float neigh_sum = 0;
+    float norm = pow(stencil_half*2+1,3);
 
     for(int r = 0;r < num_repeats;r++) {
 
-        for (j = 0; j < z_num; j++) {
-            for (i = 0; i < x_num; i++) {
-                for (k = 0; k < y_num; k++) {
+        for(j = 0; j < (z_num);j++){
+            for(i = 0; i < (x_num);i++){
+                for(k = 0;k < (y_num);k++){
                     double neigh_sum = 0;
 
+                    int min_j = std::max(0,j-stencil_half);
+                    int min_i = std::max(0,i-stencil_half);
+                    int min_k = std::max(0,k-stencil_half);
 
-                    for (int l = -stencil_half; l < stencil_half + 1; ++l) {
-                        for (int q = -stencil_half; q < stencil_half + 1; ++q) {
-                            for (int w = -stencil_half; w < stencil_half + 1; ++w) {
+                    int max_j = std::min((int)z_num-1,j+stencil_half);
+                    int max_i = std::min((int)x_num-1,i+stencil_half);
+                    int max_k = std::min((int)y_num-1,k+stencil_half);
 
-                                j_n = j + l;
-                                i_n = i + q;
-                                k_n = k + w;
-
-                                if ((i_n >= 0) & (i_n < x_num)) {
-                                    if ((j_n >= 0) & (j_n < z_num)) {
-                                        if ((k_n >= 0) & (k_n < y_num)) {
-                                            neigh_sum += input_data.mesh[j_n * x_num * y_num + i_n * y_num + k_n];
-
-                                        }
-                                    }
-                                }
-
+                    for (int j_n = min_j; j_n < max_j+1; ++j_n) {
+                        for (int i_n = min_i; i_n < max_i+1; ++i_n) {
+                            for (int k_n = min_k; k_n < max_k+1; ++k_n) {
+                                neigh_sum += input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
                             }
                         }
                     }
 
-                    output_data.mesh[j * x_num * y_num + i * y_num + k] = std::round(
-                            neigh_sum / (1.0f * pow(stencil_half * 2 + 1, 3)));
+                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::round(neigh_sum/norm);
 
                 }
             }
         }
-    }
 
+    }
 
 
     timer.stop_timer();
@@ -217,7 +206,7 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> neighbour_iterator(apr);
     APRIterator<uint16_t> apr_iterator(apr);
 
-    unsigned int number_repeats = 10;
+    unsigned int number_repeats = 50;
     pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
 
     float time_pixels333 = pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
