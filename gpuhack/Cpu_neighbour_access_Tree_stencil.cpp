@@ -157,7 +157,7 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> neighbour_iterator(apr);
     APRIterator<uint16_t> apr_iterator(apr);
 
-    int num_rep = 20;
+    int num_rep = 100;
 
     timer.start_timer("APR serial iterator neighbours loop");
 
@@ -299,7 +299,9 @@ int main(int argc, char **argv) {
                 } else {
                     //padding
                     uint64_t index = temp_vec.x_num * temp_vec.y_num * ((z+stencil_half)%stencil_size);
-
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(static) private(x)
+#endif
                     for (x = 0; x < temp_vec.x_num; ++x) {
                         std::fill(temp_vec.mesh.begin() + index + (x + 0) * temp_vec.y_num ,
                                   temp_vec.mesh.begin() + index + (x + 1) * temp_vec.y_num , 0);
@@ -347,10 +349,9 @@ int main(int argc, char **argv) {
     double time = timer.timings.back();
 
     std::cout << 1000*time/(num_rep*(1.0f)) << " ms  CONV" << std::endl;
+    std::cout << 1000000.0*1000*time/(num_rep*(1.0f)*apr.total_number_particles()) << " ms  million particles CONV" << std::endl;
     std::cout << 1000*ds_time/(num_rep*(1.0f)) << " ms DS Tree" << std::endl;
     //check the result
-
-
 
     bool success = true;
     uint64_t f_c=0;
