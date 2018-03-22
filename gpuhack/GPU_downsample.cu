@@ -87,6 +87,19 @@ __global__ void down_sample_avg_mid(const std::size_t *row_info,
                                 const std::uint16_t* level_y_num,
                                 const std::size_t level);
 
+__global__ void down_sample_avg(const std::size_t *row_info,
+                                const std::uint16_t *particle_y,
+                                const std::size_t* level_offset,
+                                const std::uint16_t *particle_data_input,
+                                const std::size_t *row_info_child,
+                                const std::uint16_t *particle_y_child,
+                                const std::size_t* level_offset_child,
+                                std::float_t *particle_data_output,
+                                const std::uint16_t* level_x_num,
+                                const std::uint16_t* level_z_num,
+                                const std::uint16_t* level_y_num,
+                                const std::size_t level);
+
 
 ExtraParticleData<float> meanDownsamplingOld(APR<uint16_t> &aInputApr, APRTree<uint16_t> &aprTree) {
     APRIterator<uint16_t> aprIt(aInputApr);
@@ -213,6 +226,59 @@ int main(int argc, char **argv) {
     ExtraParticleData<float> tree_mean_gpu(aprTree);
     tree_mean_gpu.init_gpu(aprTree.total_number_parent_cells());
 
+
+
+    for (int i = 0; i < 1; ++i) {
+
+        timer.start_timer("summing the sptial informatino for each partilce on the GPU");
+        for (int rep = 0; rep < number_reps; ++rep) {
+
+            for (int level = apr.level_min(); level <= apr.level_min(); ++level) {
+
+                std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
+                std::size_t offset = gpuaprAccess.h_level_offset[level];
+
+                std::size_t x_num = apr.spatial_index_x_max(level);
+                std::size_t z_num = apr.spatial_index_z_max(level);
+                std::size_t y_num = apr.spatial_index_y_max(level);
+
+                dim3 threads_l(32, 1, 1);
+
+                int x_blocks = (number_rows_l + 32 - 1) / 32;
+                int z_blocks = 1;
+
+                dim3 blocks_l(x_blocks, 1, z_blocks);
+
+
+
+                down_sample_avg << < blocks_l, threads_l >> >
+                                                       (gpuaprAccess.gpu_access.row_global_index,
+                                                               gpuaprAccess.gpu_access.y_part_coord,
+                                                               gpuaprAccess.gpu_access.level_offsets,
+                                                               apr.particles_intensities.gpu_pointer,
+                                                               gpuaprAccessTree.gpu_access.row_global_index,
+                                                               gpuaprAccessTree.gpu_access.y_part_coord,
+                                                               gpuaprAccessTree.gpu_access.level_offsets,
+                                                               tree_mean_gpu.gpu_pointer,
+                                                               gpuaprAccess.gpu_access.level_x_num,
+                                                               gpuaprAccess.gpu_access.level_z_num,
+                                                               gpuaprAccess.gpu_access.level_y_num,
+                                                               level);
+
+
+                cudaDeviceSynchronize();
+            }
+        }
+
+        timer.stop_timer();
+    }
+
+    float gpu_iterate_time_batch = timer.timings.back();
+    std::cout << "Average time for loop insert max: " << (gpu_iterate_time_batch/(number_reps*1.0f))*1000 << " ms" << std::endl;
+    std::cout << "Average time for loop insert max per million: " << (gpu_iterate_time_batch/(number_reps*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
+
+
+
     cudaDeviceSynchronize();
     for (int i = 0; i < 2; ++i) {
 
@@ -237,19 +303,19 @@ int main(int argc, char **argv) {
 
 
                 if((level < apr.level_max()) && (level >= apr.level_min()) ) {
-                    down_sample_avg_mid << < blocks_l, threads_l >> >
-                                                   (gpuaprAccess.gpu_access.row_global_index,
-                                                           gpuaprAccess.gpu_access.y_part_coord,
-                                                           gpuaprAccess.gpu_access.level_offsets,
-                                                           apr.particles_intensities.gpu_pointer,
-                                                           gpuaprAccessTree.gpu_access.row_global_index,
-                                                           gpuaprAccessTree.gpu_access.y_part_coord,
-                                                           gpuaprAccessTree.gpu_access.level_offsets,
-                                                           tree_mean_gpu.gpu_pointer,
-                                                           gpuaprAccess.gpu_access.level_x_num,
-                                                           gpuaprAccess.gpu_access.level_z_num,
-                                                           gpuaprAccess.gpu_access.level_y_num,
-                                                           level);
+//                    down_sample_avg_mid << < blocks_l, threads_l >> >
+//                                                   (gpuaprAccess.gpu_access.row_global_index,
+//                                                           gpuaprAccess.gpu_access.y_part_coord,
+//                                                           gpuaprAccess.gpu_access.level_offsets,
+//                                                           apr.particles_intensities.gpu_pointer,
+//                                                           gpuaprAccessTree.gpu_access.row_global_index,
+//                                                           gpuaprAccessTree.gpu_access.y_part_coord,
+//                                                           gpuaprAccessTree.gpu_access.level_offsets,
+//                                                           tree_mean_gpu.gpu_pointer,
+//                                                           gpuaprAccess.gpu_access.level_x_num,
+//                                                           gpuaprAccess.gpu_access.level_z_num,
+//                                                           gpuaprAccess.gpu_access.level_y_num,
+//                                                           level);
                 }
 
                 cudaDeviceSynchronize();
@@ -329,6 +395,66 @@ __device__ void get_row_begin_end(std::size_t* index_begin,
 
 };
 
+
+__global__ void down_sample_avg(const std::size_t *row_info,
+                                    const std::uint16_t *particle_y,
+                                    const std::size_t* level_offset,
+                                    const std::uint16_t *particle_data_input,
+                                    const std::size_t *row_info_child,
+                                    const std::uint16_t *particle_y_child,
+                                    const std::size_t* level_offset_child,
+                                    std::float_t *particle_data_output,
+                                    const std::uint16_t* level_x_num,
+                                    const std::uint16_t* level_z_num,
+                                    const std::uint16_t* level_y_num,
+                                    const std::size_t level) {
+
+    const int x_num = level_x_num[level];
+    const int y_num = level_y_num[level];
+    const int z_num = level_z_num[level];
+
+    const int local_row_index = (blockDim.x * blockIdx.x + threadIdx.x );
+
+    if(local_row_index >= x_num*z_num){
+        return;
+    }
+
+    std::size_t global_row_index_begin = blockDim.x * blockIdx.x + level_offset[level];
+    std::size_t global_row_index_end = min(blockDim.x * blockIdx.x + 31,z_num*x_num-1) + level_offset[level];
+
+    std::size_t global_index_begin_0;
+    std::size_t global_index_end_0;
+
+    std::size_t global_index_begin_f;
+    std::size_t global_index_end_f;
+
+    get_row_begin_end(&global_index_begin_0, &global_index_end_0, &global_row_index_begin, row_info);
+    get_row_begin_end(&global_index_begin_f, &global_index_end_f, &global_row_index_end, row_info);
+
+    __shared__ std::uint16_t f_cache[32];
+    __shared__ std::uint16_t y_cache[32];
+
+    std::size_t number_parts = global_index_end_f - global_index_begin_0;
+    std::size_t number_chunk = ((number_parts+31)/32);
+
+    //printf("hello begin %d end %d chunks %d number parts %d \n",(int) global_index_begin_0,(int) global_index_end_f, (int) number_chunk, (int) number_parts);
+
+    for (int i = 0; i < (number_chunk); ++i) {
+        //read
+        if(i*32 + global_index_begin_0 + threadIdx.x < global_index_end_f) {
+            f_cache[threadIdx.x]=particle_data_input[i*32 + global_index_begin_0 + threadIdx.x];
+        } else {
+            f_cache[threadIdx.x]=0;
+        }
+        //f_cache[threadIdx.x]=1;
+        //f_cache[threadIdx.x]=1;
+        //__syncthreads();
+    }
+
+
+}
+
+
 __global__ void down_sample_avg_mid(const std::size_t *row_info,
                                 const std::uint16_t *particle_y,
                                 const std::size_t* level_offset,
@@ -358,6 +484,10 @@ __global__ void down_sample_avg_mid(const std::size_t *row_info,
     int N = 2;
 
     __shared__ std::float_t local_patch[8][8][1]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+
+    __shared__ std::uint16_t row_cache[32];
+
+
 
     if(threadIdx.x >= 8){
         return;
