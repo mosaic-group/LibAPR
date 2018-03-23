@@ -609,7 +609,6 @@ __global__ void shared_update_max(const std::size_t *row_info,
     __shared__ std::float_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
 
-
     if(threadIdx.x >= 10){
         return;
     }
