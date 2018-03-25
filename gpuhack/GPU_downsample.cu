@@ -110,6 +110,19 @@ __global__ void shared_update(const std::size_t *row_info,
                               const std::size_t y_num,
                               const std::size_t level);
 
+__global__ void down_sample_y_update(const std::size_t *row_info,
+                                     const std::uint16_t *particle_y,
+                                     const std::size_t* level_offset,
+                                     const std::uint16_t *particle_data_input,
+                                     const std::size_t *row_info_child,
+                                     const std::uint16_t *particle_y_child,
+                                     const std::size_t* level_offset_child,
+                                     std::float_t *particle_data_output,
+                                     const std::uint16_t* level_x_num,
+                                     const std::uint16_t* level_z_num,
+                                     const std::uint16_t* level_y_num,
+                                     const std::size_t level);
+
 
 ExtraParticleData<float> meanDownsamplingOld(APR<uint16_t> &aInputApr, APRTree<uint16_t> &aprTree) {
     APRIterator<uint16_t> aprIt(aInputApr);
@@ -244,7 +257,7 @@ int main(int argc, char **argv) {
         timer.start_timer("summing the sptial informatino for each partilce on the GPU");
         for (int rep = 0; rep < number_reps; ++rep) {
 
-            for (int level = apr.level_max(); level > aprIt.level_min(); --level) {
+            for (int level = apr.level_max(); level >= aprIt.level_min(); --level) {
 
                 std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
                 std::size_t offset = gpuaprAccess.h_level_offset[level];
@@ -262,7 +275,7 @@ int main(int argc, char **argv) {
 
 
 
-                down_sample_avg << < blocks_l, threads_l >> >
+                down_sample_y_update << < blocks_l, threads_l >> >
                                                        (gpuaprAccess.gpu_access.row_global_index,
                                                                gpuaprAccess.gpu_access.y_part_coord,
                                                                gpuaprAccess.gpu_access.level_offsets,
@@ -426,7 +439,140 @@ __device__ void get_row_begin_end(std::size_t* index_begin,
 
 
 };
+__global__ void down_sample_y_update(const std::size_t *row_info,
+                                const std::uint16_t *particle_y,
+                                const std::size_t* level_offset,
+                                const std::uint16_t *particle_data_input,
+                                const std::size_t *row_info_child,
+                                const std::uint16_t *particle_y_child,
+                                const std::size_t* level_offset_child,
+                                std::float_t *particle_data_output,
+                                const std::uint16_t* level_x_num,
+                                const std::uint16_t* level_z_num,
+                                const std::uint16_t* level_y_num,
+                                const std::size_t level) {
 
+    const int x_num = level_x_num[level];
+    const int y_num = level_y_num[level];
+    const int z_num = level_z_num[level];
+
+    const int x_num_p = level_x_num[level-1];
+    const int y_num_p = level_y_num[level-1];
+    const int z_num_p = level_z_num[level-1];
+
+    const int local_row_index = (blockDim.x * blockIdx.x + threadIdx.x );
+
+    if(blockDim.x * blockIdx.x >= x_num*z_num){
+        return;
+    }
+
+    std::size_t global_row_index_begin = blockDim.x * blockIdx.x + level_offset[level];
+    std::size_t global_row_index_end = min(blockDim.x * blockIdx.x + 31,z_num*x_num-1) + level_offset[level];
+
+    std::size_t global_index_begin_0;
+    std::size_t global_index_end_0;
+
+    std::size_t global_index_begin_p;
+    std::size_t global_index_end_p;
+
+    __shared__ std::float_t f_cache[32];
+    __shared__ std::uint16_t y_cache[32];
+
+    //initialization to zero
+    f_cache[threadIdx.x]=0;
+    y_cache[threadIdx.x]=0;
+
+
+    std::size_t num_rows = global_row_index_end - global_row_index_begin;
+
+    uint16_t current_y=0;
+    //ying printf("hello begin %d end %d chunks %d number parts %d \n",(int) global_index_begin_0,(int) global_index_end_f, (int) number_chunk, (int) number_parts);
+
+    for (std::size_t row = global_row_index_begin; row <= global_row_index_end; ++row) {
+
+        get_row_begin_end(&global_index_begin_0, &global_index_end_0, row, row_info);
+        std::size_t number_parts = global_index_end_0 - global_index_begin_0;
+        std::uint16_t number_chunk = ((number_parts+31)/32);
+
+        std::uint16_t number_y_chunk = (y_num+31)/32;
+
+        //initialize (i=0)
+        if (global_index_begin_0 + threadIdx.x < global_index_end_0) {
+            f_cache[threadIdx.x] = particle_data_input[global_index_begin_0 + threadIdx.x];
+        }
+
+        if ( global_index_begin_0 + threadIdx.x < global_index_end_0) {
+            y_cache[threadIdx.x] = particle_y[ global_index_begin_0 + threadIdx.x];
+        }
+
+        uint16_t sparse_block = 0;
+
+        for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
+
+            current_y = y_cache[threadIdx.x ];
+
+            __syncthreads();
+            //value less then current chunk then update.
+            if (current_y < y_block*32) {
+                sparse_block++;
+                if (sparse_block * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
+                    f_cache[threadIdx.x] = particle_data_input[sparse_block * 32 + global_index_begin_0 + threadIdx.x];
+                    y_cache[threadIdx.x] = particle_y[sparse_block * 32 + global_index_begin_0 + threadIdx.x];
+                }
+
+            }
+
+
+            //do something
+            if(current_y < (y_block+1)*32) {
+
+
+
+            }
+
+            __syncthreads();
+            //output
+            if(current_y < (y_block+1)*32) {
+                if (sparse_block * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
+
+                    particle_data_output[sparse_block * 32 + global_index_begin_0 + threadIdx.x] = f_cache[threadIdx.x];
+                }
+            }
+
+        }
+
+
+
+//        for (int i = 0; i < (number_chunk); ++i) {
+//
+//            //read in as blocks
+//            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
+//                f_cache[threadIdx.x] = particle_data_input[i * 32 + global_index_begin_0 + threadIdx.x];
+//            } else {
+//                f_cache[threadIdx.x] = 0;
+//            }
+//
+//            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
+//                y_cache[threadIdx.x] = particle_y[i * 32 + global_index_begin_0 + threadIdx.x];
+//            } else {
+//                y_cache[threadIdx.x] = 0;
+//            }
+//
+//
+//
+//
+//            //inner y loop they all check if they have the lucky winner   NEED TO USE 32 length case lines
+//
+//
+//            //write out as blocks
+//            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
+//
+//                particle_data_output[i * 32 + global_index_begin_0 + threadIdx.x] = f_cache[threadIdx.x];
+//            }
+//        }
+    }
+
+}
 
 
 __global__ void down_sample_avg(const std::size_t *row_info,

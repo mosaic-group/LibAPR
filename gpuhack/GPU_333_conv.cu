@@ -606,7 +606,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     const unsigned int N = 4;
 
-    __shared__ std::float_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::uint16_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
 
     if(threadIdx.x >= 10){
@@ -1010,6 +1010,7 @@ __global__ void shared_update_min(const std::size_t *row_info,
 
     uint16_t y_cache[N]={0}; // These are local register/private caches
     uint16_t index_cache[N]={0}; // These are local register/private caches
+
 
     if(threadIdx.x >= 10){
         return;
