@@ -248,6 +248,66 @@ int main(int argc, char **argv) {
     ExtraParticleData<float> tree_mean_gpu(aprTree);
     tree_mean_gpu.init_gpu(aprTree.total_number_parent_cells());
 
+
+
+    for (int i = 0; i < 2; ++i) {
+
+        timer.start_timer("summing the sptial informatino for each partilce on the GPU");
+        for (int rep = 0; rep < number_reps; ++rep) {
+
+            for (int level = apr.level_max(); level >= aprIt.level_min(); --level) {
+
+                std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
+                std::size_t offset = gpuaprAccess.h_level_offset[level];
+
+                std::size_t x_num = apr.spatial_index_x_max(level);
+                std::size_t z_num = apr.spatial_index_z_max(level);
+                std::size_t y_num = apr.spatial_index_y_max(level);
+
+                dim3 threads_l(128, 1, 1);
+
+                int x_blocks = (x_num + 2 - 1) / 2;
+                int z_blocks = (z_num + 2 - 1) / 2;
+
+                dim3 blocks_l(x_blocks, 1, z_blocks);
+
+
+                down_sample_avg <<< blocks_l, threads_l >>>
+                                                       (gpuaprAccess.gpu_access.row_global_index,
+                                                               gpuaprAccess.gpu_access.y_part_coord,
+                                                               gpuaprAccess.gpu_access.level_offsets,
+                                                               apr.particles_intensities.gpu_pointer,
+                                                               gpuaprAccessTree.gpu_access.row_global_index,
+                                                               gpuaprAccessTree.gpu_access.y_part_coord,
+                                                               gpuaprAccessTree.gpu_access.level_offsets,
+                                                               tree_mean_gpu.gpu_pointer,
+                                                               gpuaprAccess.gpu_access.level_x_num,
+                                                               gpuaprAccess.gpu_access.level_z_num,
+                                                               gpuaprAccess.gpu_access.level_y_num,
+                                                               level);
+
+
+                cudaDeviceSynchronize();
+            }
+        }
+
+        timer.stop_timer();
+    }
+
+    float gpu_iterate_time_batch = timer.timings.back();
+    std::cout << "Average time NEWt for loop insert max: " << (gpu_iterate_time_batch/(number_reps*1.0f))*1000 << " ms" << std::endl;
+    std::cout << "Average time NEWt for loop insert max per million: " << (gpu_iterate_time_batch/(number_reps*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
+
+    //copy data back from gpu
+    tree_mean_gpu.copy_data_to_host();
+
+    tree_mean_gpu.gpu_data.clear();
+    tree_mean_gpu.gpu_data.shrink_to_fit();
+
+
+
+    cudaDeviceSynchronize();
+
     ExtraParticleData<float> dummy(apr);
     dummy.init_gpu(apr.total_number_particles());
 
@@ -266,28 +326,27 @@ int main(int argc, char **argv) {
                 std::size_t z_num = apr.spatial_index_z_max(level);
                 std::size_t y_num = apr.spatial_index_y_max(level);
 
-                dim3 threads_l(32, 1, 1);
+                dim3 threads_l(128, 1, 1);
 
-                int x_blocks = (number_rows_l + 32 - 1) / 32;
-                int z_blocks = 1;
+                int x_blocks = (x_num + 2 - 1) / 2;
+                int z_blocks = (z_num + 2 - 1) / 2;
 
                 dim3 blocks_l(x_blocks, 1, z_blocks);
 
 
-
                 down_sample_y_update << < blocks_l, threads_l >> >
-                                                       (gpuaprAccess.gpu_access.row_global_index,
-                                                               gpuaprAccess.gpu_access.y_part_coord,
-                                                               gpuaprAccess.gpu_access.level_offsets,
-                                                               apr.particles_intensities.gpu_pointer,
-                                                               gpuaprAccessTree.gpu_access.row_global_index,
-                                                               gpuaprAccessTree.gpu_access.y_part_coord,
-                                                               gpuaprAccessTree.gpu_access.level_offsets,
-                                                               dummy.gpu_pointer,
-                                                               gpuaprAccess.gpu_access.level_x_num,
-                                                               gpuaprAccess.gpu_access.level_z_num,
-                                                               gpuaprAccess.gpu_access.level_y_num,
-                                                               level);
+                                               (gpuaprAccess.gpu_access.row_global_index,
+                                                       gpuaprAccess.gpu_access.y_part_coord,
+                                                       gpuaprAccess.gpu_access.level_offsets,
+                                                       apr.particles_intensities.gpu_pointer,
+                                                       gpuaprAccessTree.gpu_access.row_global_index,
+                                                       gpuaprAccessTree.gpu_access.y_part_coord,
+                                                       gpuaprAccessTree.gpu_access.level_offsets,
+                                                       dummy.gpu_pointer,
+                                                       gpuaprAccess.gpu_access.level_x_num,
+                                                       gpuaprAccess.gpu_access.level_z_num,
+                                                       gpuaprAccess.gpu_access.level_y_num,
+                                                       level);
 
 
                 cudaDeviceSynchronize();
@@ -297,9 +356,9 @@ int main(int argc, char **argv) {
         timer.stop_timer();
     }
 
-    float gpu_iterate_time_batch = timer.timings.back();
-    std::cout << "Average time NEW for loop insert max: " << (gpu_iterate_time_batch/(number_reps*1.0f))*1000 << " ms" << std::endl;
-    std::cout << "Average time NEW for loop insert max per million: " << (gpu_iterate_time_batch/(number_reps*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
+    float gpu_iterate_time_batcht = timer.timings.back();
+    std::cout << "Average time NEW for loop insert max: " << (gpu_iterate_time_batcht/(number_reps*1.0f))*1000 << " ms" << std::endl;
+    std::cout << "Average time NEW for loop insert max per million: " << (gpu_iterate_time_batcht/(number_reps*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
 
 
     //copy data back from gpu
@@ -308,53 +367,6 @@ int main(int argc, char **argv) {
     dummy.gpu_data.clear();
     dummy.gpu_data.shrink_to_fit();
 
-
-    cudaDeviceSynchronize();
-    ExtraParticleData<uint16_t> spatial_info_test(apr);
-    spatial_info_test.init_gpu(apr.total_number_particles());
-
-
-    timer.start_timer("summing the sptial informatino for each partilce on the GPU");
-    for (int rep = 0; rep < number_reps; ++rep) {
-
-        for (int level = apr.level_max(); level > aprIt.level_min(); --level) {
-
-            std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
-            std::size_t offset = gpuaprAccess.h_level_offset[level];
-
-            std::size_t x_num = apr.spatial_index_x_max(level);
-            std::size_t z_num = apr.spatial_index_z_max(level);
-            std::size_t y_num = apr.spatial_index_y_max(level);
-
-
-            dim3 threads_l(10, 1, 10);
-
-            int x_blocks = (x_num + 8 - 1) / 8;
-            int z_blocks = (z_num + 8 - 1) / 8;
-
-            //std::cout << "xb: " << x_blocks << " zb: " << z_blocks << std::endl;
-
-            dim3 blocks_l(x_blocks, 1, z_blocks);
-
-            shared_update <<< blocks_l, threads_l >>>
-                                        (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer,spatial_info_test.gpu_pointer, offset,x_num,z_num,y_num,level);
-
-            cudaDeviceSynchronize();
-        }
-    }
-
-    timer.stop_timer();
-
-    float gpu_iterate_time_si = timer.timings.back();
-
-    std::cout << "Average time old shared for loop insert max: " << (gpu_iterate_time_si/(number_reps*1.0f))*1000 << " ms" << std::endl;
-    std::cout << "Average time old shared for loop insert max per million: " << (gpu_iterate_time_si/(number_reps*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
-
-    //copy data back from gpu
-    spatial_info_test.copy_data_to_host();
-
-    spatial_info_test.gpu_data.clear();
-    spatial_info_test.gpu_data.shrink_to_fit();
 
     //////////////////////////
     ///
@@ -367,26 +379,36 @@ int main(int argc, char **argv) {
     success=true;
     uint64_t output_c=0;
 
-//    for (uint64_t particle_number = 0; particle_number < aprTree.total_number_parent_cells(); ++particle_number) {
-//        //This step is required for all loops to set the iterator by the particle number
-//        treeIt.set_iterator_to_particle_by_number(particle_number);
-//        //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
-//        if(tree_mean_gpu[treeIt]==ds_parts[treeIt]){
-//            c_pass++;
-//        } else {
-//            c_fail++;
-//            success = false;
-//            if(treeIt.level() <= treeIt.level_max()) {
-//                if (output_c < 1) {
-//                    std::cout << "Expected: " << ds_parts[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
-//                              << " z: " << treeIt.z() << " y: " << treeIt.y() << std::endl;
-//                    output_c++;
-//                }
-//                //spatial_info_test3[aprIt] = 0;
-//            }
-//
-//        }
-//    }
+    for (uint64_t particle_number = 0; particle_number < aprTree.total_number_parent_cells(); ++particle_number) {
+        //This step is required for all loops to set the iterator by the particle number
+        treeIt.set_iterator_to_particle_by_number(particle_number);
+        //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
+        if(tree_mean_gpu[treeIt]==ds_parts[treeIt]){
+            c_pass++;
+        } else {
+            c_fail++;
+            success = false;
+            if(treeIt.level() == treeIt.level_max()) {
+                if (output_c < 10) {
+                    std::cout << "Expected: " << ds_parts[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
+                              << " z: " << treeIt.z() << " y: " << treeIt.y() << std::endl;
+                    output_c++;
+                }
+            }
+
+        }
+    }
+
+    if(success){
+        std::cout << "Direct ds, PASS" << std::endl;
+    } else {
+        std::cout << "Direct ds Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
+    }
+
+    c_pass = 0;
+    c_fail = 0;
+    success=true;
+    output_c=0;
 
 
     for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
@@ -460,117 +482,99 @@ __global__ void down_sample_y_update(const std::size_t *row_info,
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const int local_row_index = (blockDim.x * blockIdx.x + threadIdx.x );
+    int x_index = (2 * blockIdx.x + threadIdx.x/64);
+    int z_index = (2 * blockIdx.z + ((threadIdx.x+31)/32)%2);
 
-    if(blockDim.x * blockIdx.x >= x_num*z_num){
-        return;
+    int block = threadIdx.x/32;
+    int local_th = (threadIdx.x%32);
+
+    if(x_index >= x_num ){
+
+        return; //out of bounds
     }
 
-    std::size_t global_row_index_begin = blockDim.x * blockIdx.x + level_offset[level];
-    std::size_t global_row_index_end = min(blockDim.x * blockIdx.x + 31,z_num*x_num-1) + level_offset[level];
+    if(z_index >= z_num){
+
+        return; //out of bounds
+    }
+
+    std::size_t row_index =x_index + z_index*x_num + level_offset[level];
 
     std::size_t global_index_begin_0;
     std::size_t global_index_end_0;
 
-    std::size_t global_index_begin_p;
-    std::size_t global_index_end_p;
-
-    __shared__ std::float_t f_cache[32];
-    __shared__ std::uint16_t y_cache[32];
+    __shared__ std::float_t f_cache[5][32];
+    __shared__ int y_cache[5][32];
 
     //initialization to zero
-    f_cache[threadIdx.x]=0;
-    y_cache[threadIdx.x]=0;
+    f_cache[block][local_th]=0;
+    y_cache[block][local_th]=0;
 
-
-    std::size_t num_rows = global_row_index_end - global_row_index_begin;
 
     uint16_t current_y=0;
     //ying printf("hello begin %d end %d chunks %d number parts %d \n",(int) global_index_begin_0,(int) global_index_end_f, (int) number_chunk, (int) number_parts);
 
-    for (std::size_t row = global_row_index_begin; row <= global_row_index_end; ++row) {
 
-        get_row_begin_end(&global_index_begin_0, &global_index_end_0, row, row_info);
-        std::size_t number_parts = global_index_end_0 - global_index_begin_0;
-        std::uint16_t number_chunk = ((number_parts+31)/32);
+    get_row_begin_end(&global_index_begin_0, &global_index_end_0, row_index, row_info);
+    std::size_t number_parts = global_index_end_0 - global_index_begin_0;
+    std::uint16_t number_chunk = ((number_parts+31)/32);
 
-        std::uint16_t number_y_chunk = (y_num+31)/32;
+    std::uint16_t number_y_chunk = (y_num+31)/32;
 
-        //initialize (i=0)
-        if (global_index_begin_0 + threadIdx.x < global_index_end_0) {
-            f_cache[threadIdx.x] = particle_data_input[global_index_begin_0 + threadIdx.x];
-        }
-
-        if ( global_index_begin_0 + threadIdx.x < global_index_end_0) {
-            y_cache[threadIdx.x] = particle_y[ global_index_begin_0 + threadIdx.x];
-        }
-
-        uint16_t sparse_block = 0;
-
-        for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
-
-            current_y = y_cache[threadIdx.x ];
-
-            __syncthreads();
-            //value less then current chunk then update.
-            if (current_y < y_block*32) {
-                sparse_block++;
-                if (sparse_block * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-                    f_cache[threadIdx.x] = particle_data_input[sparse_block * 32 + global_index_begin_0 + threadIdx.x];
-                    y_cache[threadIdx.x] = particle_y[sparse_block * 32 + global_index_begin_0 + threadIdx.x];
-                }
-
-            }
-
-
-            //do something
-            if(current_y < (y_block+1)*32) {
-
-
-
-            }
-
-            __syncthreads();
-            //output
-            if(current_y < (y_block+1)*32) {
-                if (sparse_block * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-
-                    particle_data_output[sparse_block * 32 + global_index_begin_0 + threadIdx.x] = f_cache[threadIdx.x];
-                }
-            }
-
-        }
-
-
-
-//        for (int i = 0; i < (number_chunk); ++i) {
-//
-//            //read in as blocks
-//            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-//                f_cache[threadIdx.x] = particle_data_input[i * 32 + global_index_begin_0 + threadIdx.x];
-//            } else {
-//                f_cache[threadIdx.x] = 0;
-//            }
-//
-//            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-//                y_cache[threadIdx.x] = particle_y[i * 32 + global_index_begin_0 + threadIdx.x];
-//            } else {
-//                y_cache[threadIdx.x] = 0;
-//            }
-//
-//
-//
-//
-//            //inner y loop they all check if they have the lucky winner   NEED TO USE 32 length case lines
-//
-//
-//            //write out as blocks
-//            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-//
-//                particle_data_output[i * 32 + global_index_begin_0 + threadIdx.x] = f_cache[threadIdx.x];
-//            }
-//        }
+    //initialize (i=0)
+    if (global_index_begin_0 + local_th < global_index_end_0) {
+        f_cache[block][local_th] = particle_data_input[global_index_begin_0 + local_th];
     }
+
+    if ( global_index_begin_0 + local_th < global_index_end_0) {
+        y_cache[block][local_th] = particle_y[ global_index_begin_0 + local_th];
+    }
+
+    current_y = y_cache[block][local_th ];
+
+    uint16_t sparse_block = 0;
+
+    for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
+
+        __syncthreads();
+        //value less then current chunk then update.
+        if (current_y < y_block * 32) {
+            sparse_block++;
+            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+                f_cache[block][local_th] = particle_data_input[sparse_block * 32 + global_index_begin_0 +
+                        local_th];
+            }
+
+            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+                y_cache[block][local_th] = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
+            }
+
+        }
+
+        current_y = y_cache[block][local_th];
+
+        //do something
+        if (current_y < (y_block + 1) * 32) {
+
+
+        }
+
+        __syncthreads();
+        //output
+        if (current_y < (y_block + 1) * 32) {
+            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+
+                particle_data_output[sparse_block * 32 + global_index_begin_0 +
+                        local_th] = f_cache[block][local_th];
+            }
+        }
+    }
+
+
+
+
+
+
 
 }
 
@@ -596,14 +600,28 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const int local_row_index = (blockDim.x * blockIdx.x + threadIdx.x );
+    int x_index = (2 * blockIdx.x + threadIdx.x/64);
+    int z_index = (2 * blockIdx.z + ((threadIdx.x+31)/32)%2);
 
-    if(blockDim.x * blockIdx.x >= x_num*z_num){
-        return;
+    int x_index_p = x_index/2;
+    int z_index_p = z_index/2;
+
+    std::size_t row_index_p =x_index_p + z_index_p*x_num_p + level_offset[level-1];
+
+    int block = threadIdx.x/32;
+    int local_th = (threadIdx.x%32);
+
+    if(x_index >= x_num ){
+
+        return; //out of bounds
     }
 
-    std::size_t global_row_index_begin = blockDim.x * blockIdx.x + level_offset[level];
-    std::size_t global_row_index_end = min(blockDim.x * blockIdx.x + 31,z_num*x_num-1) + level_offset[level];
+    if(z_index >= z_num){
+
+        return; //out of bounds
+    }
+
+    std::size_t row_index =x_index + z_index*x_num + level_offset[level];
 
     std::size_t global_index_begin_0;
     std::size_t global_index_end_0;
@@ -611,152 +629,145 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     std::size_t global_index_begin_p;
     std::size_t global_index_end_p;
 
-    __shared__ std::uint16_t f_cache[32];
-    __shared__ std::uint16_t y_cache[32];
 
-    __shared__ std::uint16_t p_y_cache[32];
+    __shared__ float f_cache[5][32];
+    __shared__ int y_cache[5][32];
 
-    __shared__ std::uint16_t y_buffer[32];
+    __shared__ float parent_cache[2][16];
 
-    std::size_t num_rows = global_row_index_end - global_row_index_begin;
+    //initialization to zero
+    f_cache[block][local_th]=0;
+    y_cache[block][local_th]=0;
+
+    if(block==0){
+        f_cache[4][local_th]=0;
+        y_cache[4][local_th]=0;
+    }
 
 
+    int current_y=0;
+    int current_y_p=-1;
     //ying printf("hello begin %d end %d chunks %d number parts %d \n",(int) global_index_begin_0,(int) global_index_end_f, (int) number_chunk, (int) number_parts);
 
-    for (std::size_t row = global_row_index_begin; row <= global_row_index_end; ++row) {
 
-        get_row_begin_end(&global_index_begin_0, &global_index_end_0, row, row_info);
-        std::size_t number_parts = global_index_end_0 - global_index_begin_0;
-        std::uint16_t number_chunk = ((number_parts+31)/32);
+    get_row_begin_end(&global_index_begin_0, &global_index_end_0, row_index, row_info);
 
-        std::uint16_t z_  = local_row_index/x_num;
+    get_row_begin_end(&global_index_begin_p, &global_index_end_p, row_index_p, row_info_child);
 
-        std::uint16_t x_ = local_row_index - z_*x_num;
 
-        std::uint16_t x_p = x_/2;
-        std::uint16_t z_p = z_/2;
-        std::size_t parent_row = z_p*x_num_p + x_p + level_offset_child[level-1];
+    std::size_t number_parts = global_index_end_0 - global_index_begin_0;
+    std::uint16_t number_chunk = ((number_parts+31)/32);
 
-        get_row_begin_end(&global_index_begin_p, &global_index_end_p, parent_row, row_info);
+    std::uint16_t number_y_chunk = (y_num+31)/32;
 
-        for (int i = 0; i < (number_chunk); ++i) {
+    //initialize (i=0)
+    if (global_index_begin_0 + local_th < global_index_end_0) {
+        f_cache[block][local_th] = particle_data_input[global_index_begin_0 + local_th];
+    }
 
-            //read in as blocks
-            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-                f_cache[threadIdx.x] = particle_data_input[i * 32 + global_index_begin_0 + threadIdx.x];
-            } else {
-                f_cache[threadIdx.x] = 0;
+    if ( global_index_begin_0 + local_th < global_index_end_0) {
+        y_cache[block][local_th] = particle_y[ global_index_begin_0 + local_th];
+    }
+
+    current_y = y_cache[block][local_th ];
+
+    uint16_t sparse_block = 0;
+    uint16_t sparse_block_p = 0;
+
+    for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
+
+        __syncthreads();
+        //value less then current chunk then update.
+        if (current_y < y_block * 32) {
+            sparse_block++;
+            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+                f_cache[block][local_th] = particle_data_input[sparse_block * 32 + global_index_begin_0 +
+                                                               local_th];
             }
 
-            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-                y_cache[threadIdx.x] = particle_y[i * 32 + global_index_begin_0 + threadIdx.x];
-            } else {
-                y_cache[threadIdx.x] = 0;
+            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+                y_cache[block][local_th] = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
+            }
+
+        }
+
+        current_y = y_cache[block][local_th];
+
+//        //do something
+//        if (current_y < (y_block + 1) * 32) {
+//
+//            float current_val = (1.0/8.0f)*f_cache[block][local_th];
+//
+//            if(current_y%2 ==0) {
+//                parent_cache[block][((current_y / 2) % 16)] = current_val;
+//            }
+//
+//            __syncthreads();
+//
+//            if(current_y%2 ==1) {
+//                parent_cache[block][((current_y / 2) % 16)] += current_val;
+//            }
+//
+//        }
+
+        if(block < 2){
+
+            //this here needs to be dealt with..
+            if (current_y < (y_block + 1) * 32) {
+
+                float current_val = (1.0/8.0f)*f_cache[2*block][local_th];
+
+                if(current_y%2 ==0) {
+                    parent_cache[block][((y_cache[2*block][local_th] / 2) % 16)] = (1.0/8.0f)*f_cache[2*block][local_th];
+                }
+
+                if(current_y%2 ==0) {
+                    parent_cache[block][((y_cache[2*block+1][local_th] / 2) % 16)] = (1.0/8.0f)*f_cache[2*block+1][local_th];
+                }
+
             }
 
 
+        } else if (block==2){
 
-            // Do something
+            if (current_y_p < (y_block * 32)/2) {
+                sparse_block_p++;
+                if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
+                    f_cache[5][local_th] = particle_data_output[sparse_block_p * 32 + global_index_begin_p +
+                                                                   local_th];
+                }
 
-            //write out as blocks
-            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
+            }
+        } else {
+            if (current_y_p < (y_block * 32)/2) {
+                sparse_block_p++;
 
-                y_buffer[y_cache[threadIdx.x]%32] = f_cache[threadIdx.x];
+                if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
+                    y_cache[5][local_th] = particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
+                }
+
             }
 
-            //inner y loop they all check if they have the lucky winner   NEED TO USE 32 length case lines
 
+        }
+        __syncthreads();
+        current_y_p = y_cache[5][local_th];
 
-            //write out as blocks
-            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
+        //output
+        if (current_y_p < (y_block * 32)/2) {
+            sparse_block_p++;
 
-                particle_data_output[i * 32 + global_index_begin_0 + threadIdx.x] = f_cache[threadIdx.x];
+            if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
+
+                particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16];
             }
         }
     }
 
+
+
 }
 
-__global__ void loop_no_xz(const std::size_t *row_info,
-                                    const std::uint16_t *particle_y,
-                                    const std::size_t* level_offset,
-                                    const std::uint16_t *particle_data_input,
-                                    const std::size_t *row_info_child,
-                                    const std::uint16_t *particle_y_child,
-                                    const std::size_t* level_offset_child,
-                                    std::float_t *particle_data_output,
-                                    const std::uint16_t* level_x_num,
-                                    const std::uint16_t* level_z_num,
-                                    const std::uint16_t* level_y_num,
-                                    const std::size_t level) {
-
-    const int x_num = level_x_num[level];
-    const int y_num = level_y_num[level];
-    const int z_num = level_z_num[level];
-
-    const int local_row_index = (blockDim.x * blockIdx.x + threadIdx.x );
-
-    if(blockDim.x * blockIdx.x >= x_num*z_num){
-        return;
-    }
-
-    std::size_t global_row_index_begin = blockDim.x * blockIdx.x + level_offset[level];
-    std::size_t global_row_index_end = min(blockDim.x * blockIdx.x + 31,z_num*x_num-1) + level_offset[level];
-
-    std::size_t global_index_begin_0;
-    std::size_t global_index_end_0;
-
-    std::size_t global_index_begin_f;
-    std::size_t global_index_end_f;
-
-    __shared__ std::uint16_t f_cache[32];
-    __shared__ std::uint16_t y_cache[32];
-
-
-    std::size_t num_rows = global_row_index_end - global_row_index_begin;
-
-
-    //ying printf("hello begin %d end %d chunks %d number parts %d \n",(int) global_index_begin_0,(int) global_index_end_f, (int) number_chunk, (int) number_parts);
-
-    for (std::size_t row = global_row_index_begin; row <= global_row_index_end; ++row) {
-
-        get_row_begin_end(&global_index_begin_0, &global_index_end_0, row, row_info);
-        std::size_t number_parts = global_index_end_0 - global_index_begin_0;
-        std::size_t number_chunk = ((number_parts+31)/32);
-
-        std::size_t z_  = local_row_index/x_num;
-
-        std::size_t x_ = local_row_index - z_*x_num;
-
-        for (int i = 0; i < (number_chunk); ++i) {
-
-            //read in as blocks
-            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-                f_cache[threadIdx.x] = particle_data_input[i * 32 + global_index_begin_0 + threadIdx.x];
-            } else {
-                f_cache[threadIdx.x] = 0;
-            }
-
-            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-                y_cache[threadIdx.x] = particle_y[i * 32 + global_index_begin_0 + threadIdx.x];
-            } else {
-                y_cache[threadIdx.x] = 0;
-            }
-
-            // Do something
-
-            //inner y loop they all check if they have the lucky winner   NEED TO USE 32 length case lines
-
-
-            //write out as blocks
-            if (i * 32 + global_index_begin_0 + threadIdx.x < global_index_end_0) {
-
-                particle_data_output[i * 32 + global_index_begin_0 + threadIdx.x] = f_cache[threadIdx.x];
-            }
-        }
-    }
-
-}
 
 
 

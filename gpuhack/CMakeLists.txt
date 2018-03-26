@@ -18,6 +18,8 @@ macro(buildGPUTarget TARGET)
       COMPILE_FLAGS "-DAPR_USE_CUDA --expt-extended-lambda"
       )
 
+    set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS} -use_fast_math -Xptxas -O3,-v")
+
   else()
     message(WARNING "skipping building ${TARGET} as libAPR was not configured for CUDA support")
   endif()
