@@ -188,7 +188,7 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> aprIt(apr);
 
     APRTimer timer;
-    timer.verbose_flag = true;
+    timer.verbose_flag = false;
 
 
     /*
@@ -220,7 +220,7 @@ int main(int argc, char **argv) {
     std::cout << "Number parts: " << aprIt.total_number_particles() << " number in interior tree: " << ds_parts.data.size() << std::endl;
 
 
-    ds_parts.copy_data_to_gpu();
+    //ds_parts.copy_data_to_gpu();
 
 
     int number_reps = options.num_rep;
@@ -255,7 +255,7 @@ int main(int argc, char **argv) {
         timer.start_timer("summing the sptial informatino for each partilce on the GPU");
         for (int rep = 0; rep < number_reps; ++rep) {
 
-            for (int level = apr.level_max(); level >= aprIt.level_min(); --level) {
+            for (int level = apr.level_max(); level >= aprIt.level_max(); --level) {
 
                 std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
                 std::size_t offset = gpuaprAccess.h_level_offset[level];
@@ -383,14 +383,15 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         treeIt.set_iterator_to_particle_by_number(particle_number);
 
-        //if(tree_mean_gpu[treeIt]==ds_parts[treeIt]){
-        if(tree_mean_gpu[treeIt]==2*number_reps){
+        if(tree_mean_gpu[treeIt]==treeIt.y()){
+        //if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.5){
+        //if(tree_mean_gpu[treeIt]==2*number_reps){
             c_pass++;
         } else {
             //c_fail++;
 
-            if(treeIt.level() >= (treeIt.level_min()+1)) {
-                if (output_c < 100) {
+            if(treeIt.level() == (treeIt.level_max())) {
+                if (output_c < 80) {
                     std::cout << "Expected: " << ds_parts[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
                               << " z: " << treeIt.z() << " y: " << treeIt.y() << " global index: " << (int) treeIt.global_index() << std::endl;
                     output_c++;
@@ -639,6 +640,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     if(block==0){
         f_cache[4][local_th]=0;
         y_cache[4][local_th]=0;
+        parent_cache[0][local_th/2]=1;
     }
 
     int current_y=0;
@@ -722,23 +724,34 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         current_y = y_cache[block][local_th];
         __syncthreads();
 
-        if(block < 2){
+        if(block == 0){
             //block 0 or 1
-            uint16_t local_y =  y_cache[2*block][local_th];
+            uint16_t local_y =  y_cache[0][local_th];
 
-            //this here needs to be dealt with..
-            if (local_y < (y_block + 1) * 32) {
-                    parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
+            if(local_th%2==0) {
+                //this here needs to be dealt with..
+                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+                    //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
+                    local_y = (local_y/2);
+                    parent_cache[block][(local_y) % 16] = (local_y);
+
+
+                    //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
+                }
             }
 
-            local_y =  y_cache[2*block+1][local_th];
 
-            //this here needs to be dealt with..
-            if (local_y < (y_block + 1) * 32) {
-
-                parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
-
-            }
+//            local_y =  y_cache[2*block+1][local_th];
+//            if(local_y%2==1) {
+//            //this here needs to be dealt with..
+//                if (local_y < (y_block + 1) * 32) {
+//
+//                    //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
+//                    parent_cache[block][(local_y/ 2) % 16] +=1;
+//                    //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block+1][local_th];
+//
+//                }
+//            }
 
 
         } else if (block==2){
@@ -778,10 +791,12 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                 if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
 
                     //particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16];
-                    particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] += 1;
+                    particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16];
+                    //particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = current_y_p;
+                    //particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] += 1;
 
-                    parent_cache[0][current_y_p%16]=0;
-                    parent_cache[1][current_y_p%16]=0;
+                    parent_cache[0][current_y_p%16]=1;
+                    parent_cache[1][current_y_p%16]=1;
                 }
             }
 

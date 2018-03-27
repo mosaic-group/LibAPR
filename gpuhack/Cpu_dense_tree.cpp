@@ -400,6 +400,10 @@ void compareTreeIntensities(APRTreeIterator<uint16_t>& treeIterator, ExtraPartic
                 if (errCnt < maxErrorPirintNum) std::cout << "ERROR: " << " idx: " << particle_number << " {" << newData.data[particle_number] << " vs old: " << oldData.data[particle_number] << "} on level: " << level << std::endl;
                 errCnt++;
             }
+
+            if(level==treeIterator.level_max()){
+                std::cout << newData.data[particle_number] << std::endl;
+            }
         }
     }
 
