@@ -641,8 +641,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         y_cache[4][local_th]=0;
     }
 
-    int current_y=-1;
-    int current_y_p=-1;
+    int current_y=0;
+    int current_y_p=0;
     //ying printf("hello begin %d end %d chunks %d number parts %d \n",(int) global_index_begin_0,(int) global_index_end_f, (int) number_chunk, (int) number_parts);
 
 
@@ -672,9 +672,39 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         printf("y:  %d  %d \n",(int) global_index_begin_p,(int) global_index_end_p);
     }
 
+    //initialize (i=0)
+    if (global_index_begin_0 + local_th < global_index_end_0) {
+        f_cache[block][local_th] = particle_data_input[global_index_begin_0 + local_th];
+    }
+
+    if ( global_index_begin_0 + local_th < global_index_end_0) {
+        y_cache[block][local_th] = particle_y[ global_index_begin_0 + local_th];
+    }
+
+
+    if (block==0){
+
+        if ((  global_index_begin_p + local_th) < global_index_end_p) {
+            f_cache[4][local_th] = particle_data_output[ global_index_begin_p + local_th];
+
+        }
+
+    } else if (block == 1) {
+
+        if (( global_index_begin_p + local_th) < global_index_end_p) {
+
+            y_cache[4][local_th] = particle_y_child[ global_index_begin_p + local_th];
+
+        }
+
+    }
+
+    current_y = y_cache[block][local_th ];
+    current_y_p = y_cache[4][local_th ];
+
 
     uint16_t sparse_block = 0;
-    int sparse_block_p = -1;
+    int sparse_block_p =0;
 
     for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
 
@@ -736,7 +766,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
                 if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
 
-                    y_cache[4][local_th] += particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
+                    y_cache[4][local_th] = particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
 
                 }
 
