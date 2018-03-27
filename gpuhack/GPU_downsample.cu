@@ -392,7 +392,7 @@ int main(int argc, char **argv) {
             if(treeIt.level() >= (treeIt.level_min()+1)) {
                 if (output_c < 100) {
                     std::cout << "Expected: " << ds_parts[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
-                              << " z: " << treeIt.z() << " y: " << treeIt.y() << "global index" << (int) treeIt.global_index() << std::endl;
+                              << " z: " << treeIt.z() << " y: " << treeIt.y() << " global index: " << (int) treeIt.global_index() << std::endl;
                     output_c++;
 
                 }
@@ -668,7 +668,9 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     std::uint16_t number_y_chunk = (y_num+31)/32;
 
 
-
+    if(z_index_p==40 && x_index_p == 12 & level==7 & threadIdx.x ==0){
+        printf("y:  %d  %d \n",(int) global_index_begin_p,(int) global_index_end_p);
+    }
 
 
     uint16_t sparse_block = 0;
@@ -728,6 +730,10 @@ __global__ void down_sample_avg(const std::size_t *row_info,
             if (current_y_p < ((y_block * 32)/2)) {
                 sparse_block_p++;
 
+                if(z_index_p==40 && x_index_p == 12 & level==7 & sparse_block_p==2){
+                    printf("y:  %d  \n",(int) current_y_p);
+                }
+
                 if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
 
                     y_cache[4][local_th] += particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
@@ -744,7 +750,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         if(block ==0) {
             //output
 
-            if(z_index_p==40 && x_index_p == 12 & level==7 & current_y_p==48){
+            if(z_index_p==40 && x_index_p == 12 & level==7 & current_y_p==49){
                 printf("y:  %d  \n",(int) current_y_p);
             }
 
