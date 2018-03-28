@@ -421,7 +421,7 @@ int main(int argc, char **argv) {
         } else {
             //c_fail++;
 
-            if(treeIt.level() == (treeIt.level_max())) {
+            if(treeIt.level() < (treeIt.level_min())) {
                 if (output_c < 80) {
                     std::cout << "Expected: " << ds_parts[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
                               << " z: " << treeIt.z() << " y: " << treeIt.y() << " global index: " << (int) treeIt.global_index() << std::endl;
@@ -753,60 +753,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         current_y = y_cache[block][local_th];
         __syncthreads();
 
-//        if(block < 2){
-//            //block 0 or 1
-//            uint16_t local_y =  y_cache[2*block][local_th];
-//
-//            if(local_th%2==0) {
-//                //this here needs to be dealt with..
-//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-//
-//                    local_y = (local_y/2);
-//
-//                    parent_cache[block][(local_y) % 16] = (1.0/8.0f)*f_cache[2*block][local_th];
-//
-//
-//                }
-//
-//                //next threads work
-//                local_y =  y_cache[2*block][local_th+1];
-//
-//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-//
-//                    local_y = (local_y/2);
-//
-//                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block][local_th+1];
-//
-//
-//                }
-//
-//                //next threads work
-//                local_y =  y_cache[2*block+1][local_th];
-//
-//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-//
-//                    local_y = (local_y/2);
-//
-//                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
-//
-//                }
-//
-//                //next threads work
-//                local_y =  y_cache[2*block+1][local_th+1];
-//
-//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-//
-//                    local_y = (local_y/2);
-//
-//                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th+1];
-//
-//                }
-//            }
-//
-//
-//        }
 
-
+        //update the down-sampling caches
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
             parent_cache[2*block+local_th%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
@@ -814,8 +762,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         }
 
 
-
-
+        //fetch the parent particle data
         if (block==2){
 
             if (current_y_p < ((y_block * 32)/2)) {
@@ -1028,61 +975,23 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         }
         current_y_t = y_cache_t[block][local_th];
 
-
         __syncthreads();
+        //update the down-sampling caches
+        if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
-        if(block < 2){
-            //block 0 or 1
-            uint16_t local_y =  y_cache[2*block][local_th];
+            parent_cache[2*block+local_th%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
 
-            if(local_th%2==0) {
-                //this here needs to be dealt with..
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+        }
 
-                    local_y = (local_y/2);
+        //now the interior tree nodes
+        if ((current_y_t < (y_block + 1) * 32) && (current_y_t >= (y_block) * 32)) {
 
-                    parent_cache[block][(local_y) % 16] = (1.0/8.0f)*f_cache[2*block][local_th];
+            parent_cache[2*block+local_th%2][(current_y_t/2) % 16] = (1.0/8.0f)*f_cache_t[block][local_th];
 
-                }
-
-                //next threads work
-                local_y =  y_cache[2*block][local_th+1];
-
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-
-                    local_y = (local_y/2);
-
-                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block][local_th+1];
+        }
 
 
-                }
-
-                //next threads work
-                local_y =  y_cache[2*block+1][local_th];
-
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-
-                    local_y = (local_y/2);
-
-                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
-
-                }
-
-                //next threads work
-                local_y =  y_cache[2*block+1][local_th+1];
-
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-
-                    local_y = (local_y/2);
-
-                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th+1];
-
-                }
-            }
-
-
-
-        } else if (block==2){
+       if (block==2){
 
             if (current_y_p < ((y_block * 32)/2)) {
                 sparse_block_p++;
@@ -1118,10 +1027,8 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
             if (current_y_p < ((y_block+1) * 32)/2) {
                 if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
 
-                    particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16];
-
-                    parent_cache[0][current_y_p%16]=0;
-                    parent_cache[1][current_y_p%16]=0;
+                    particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16] +  parent_cache[2][current_y_p%16]
+                                                                                                  + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16];
                 }
             }
 
