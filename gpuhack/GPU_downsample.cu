@@ -250,12 +250,12 @@ int main(int argc, char **argv) {
 
 
 
-    for (int i = 0; i < 2; ++i) {
+    for (int i = 0; i < 3; ++i) {
 
         timer.start_timer("summing the sptial informatino for each partilce on the GPU");
         for (int rep = 0; rep < number_reps; ++rep) {
 
-            for (int level = apr.level_max(); level >= aprIt.level_max(); --level) {
+            for (int level = apr.level_max(); level > aprIt.level_min(); --level) {
 
                 std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
                 std::size_t offset = gpuaprAccess.h_level_offset[level];
@@ -270,7 +270,6 @@ int main(int argc, char **argv) {
                 int z_blocks = (z_num + 2 - 1) / 2;
 
                 dim3 blocks_l(x_blocks, 1, z_blocks);
-
 
                 down_sample_avg <<< blocks_l, threads_l >>>
                                                        (gpuaprAccess.gpu_access.row_global_index,
