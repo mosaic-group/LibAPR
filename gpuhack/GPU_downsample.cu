@@ -383,9 +383,9 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         treeIt.set_iterator_to_particle_by_number(particle_number);
 
-        if(tree_mean_gpu[treeIt]==8){
+        //if(tree_mean_gpu[treeIt]==8){
         //if(tree_mean_gpu[treeIt]==treeIt.y()){
-        //if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.5){
+        if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.1){
         //if(tree_mean_gpu[treeIt]==2*number_reps){
             c_pass++;
         } else {
@@ -735,7 +735,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                     //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
                     local_y = (local_y/2);
                     //parent_cache[block][(local_y) % 16] = (local_y);
-                    parent_cache[block][(local_y) % 16] = 1;
+                    //parent_cache[block][(local_y) % 16] = 1;
+                    parent_cache[block][(local_y) % 16] = (1.0/8.0f)*f_cache[2*block][local_th];
 
                     //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
                 }
@@ -747,7 +748,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                     //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
                     local_y = (local_y/2);
                     //parent_cache[block][(local_y) % 16] = (local_y);
-                    parent_cache[block][(local_y) % 16] += 1;
+                    //parent_cache[block][(local_y) % 16] += 1;
+                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block][local_th+1];
 
 
                     //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
@@ -760,7 +762,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                     //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
                     local_y = (local_y/2);
                     //parent_cache[block][(local_y) % 16] = (local_y);
-                    parent_cache[block][(local_y) % 16] += 1;
+                    //parent_cache[block][(local_y) % 16] += 1;
+                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
 
                     //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
                 }
@@ -772,7 +775,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                     //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
                     local_y = (local_y/2);
                     //parent_cache[block][(local_y) % 16] = (local_y);
-                    parent_cache[block][(local_y) % 16] += 1;
+                    //parent_cache[block][(local_y) % 16] += 1;
+                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th+1];
 
                     //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
                 }
