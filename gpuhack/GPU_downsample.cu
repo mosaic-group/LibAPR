@@ -413,16 +413,18 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         treeIt.set_iterator_to_particle_by_number(particle_number);
 
-        //if(tree_mean_gpu[treeIt]==8){
+        if(tree_mean_gpu[treeIt]==8){
         //if(tree_mean_gpu[treeIt]==treeIt.y()){
-        if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.1){
+        //if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.1){
         //if(tree_mean_gpu[treeIt]==2*number_reps){
-            c_pass++;
+            if(treeIt.level() == (treeIt.level_max())) {
+                c_pass++;
+            }
         } else {
             //c_fail++;
 
-            if(treeIt.level() < (treeIt.level_min())) {
-                if (output_c < 80) {
+            if(treeIt.level() == (treeIt.level_max())) {
+                if (output_c < 200) {
                     std::cout << "Expected: " << ds_parts[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
                               << " z: " << treeIt.z() << " y: " << treeIt.y() << " global index: " << (int) treeIt.global_index() << std::endl;
                     output_c++;
@@ -436,7 +438,7 @@ int main(int argc, char **argv) {
     }
 
     if(success){
-        std::cout << "Direct ds, PASS" << std::endl;
+        std::cout << "Direct ds, PASS: " << c_pass << std::endl;
     } else {
         std::cout << "Direct ds Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
     }
@@ -445,7 +447,6 @@ int main(int argc, char **argv) {
     c_fail = 0;
     success=true;
     output_c=0;
-
 
     for (uint64_t particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
         //This step is required for all loops to set the iterator by the particle number
@@ -671,7 +672,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     if(block==0){
         f_cache[4][local_th]=0;
         y_cache[4][local_th]=0;
-        parent_cache[0][local_th/2]=1;
+        parent_cache[0][local_th/2]=0;
     }
 
     int current_y=0;
@@ -757,7 +758,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         //update the down-sampling caches
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
-            parent_cache[2*block+local_th%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
+            //parent_cache[2*block+local_th%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
+            parent_cache[2*block+local_th%2][(current_y/2) % 16] +=1;
 
         }
 
@@ -805,7 +807,19 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                 }
             }
 
+            parent_cache[0][local_th%16]=0;
+            parent_cache[1][local_th%16]=0;
+            parent_cache[2][local_th%16]=0;
+            parent_cache[3][local_th%16]=0;
+            parent_cache[4][local_th%16]=0;
+            parent_cache[5][local_th%16]=0;
+            parent_cache[6][local_th%16]=0;
+            parent_cache[7][local_th%16]=0;
+
         }
+
+
+
     }
 
 
@@ -877,8 +891,11 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
     if(block==0){
         f_cache[4][local_th]=0;
         y_cache[4][local_th]=0;
-        parent_cache[0][local_th/2]=1;
+
     }
+
+    parent_cache[2*block][local_th/2]=0;
+    parent_cache[2*block+1][local_th/2]=0;
 
     int current_y=0;
     int current_y_p=0;
@@ -899,6 +916,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
     }
 
+    get_row_begin_end(&global_index_begin_p, &global_index_end_p, row_index_p, row_info_child);
 
     std::uint16_t number_y_chunk = (y_num+31)/32;
 
@@ -946,6 +964,8 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
     int sparse_block_p =0;
     int sparse_block_t =0;
 
+
+
     for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
 
         //__syncthreads();
@@ -966,6 +986,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         if (current_y_t < y_block * 32) {
             sparse_block_t++;
             if (sparse_block_t * 32 + global_index_begin_t + local_th < global_index_end_t) {
+
                 f_cache_t[block][local_th] = particle_data_output[sparse_block_t * 32 + global_index_begin_t +
                                                                local_th];
 
@@ -979,14 +1000,16 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         //update the down-sampling caches
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
-            parent_cache[2*block+local_th%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
+            //parent_cache[2*block+current_y%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
+            parent_cache[2*block+current_y%2][(current_y/2) % 16] += 1;
 
         }
 
         //now the interior tree nodes
         if ((current_y_t < (y_block + 1) * 32) && (current_y_t >= (y_block) * 32)) {
 
-            parent_cache[2*block+local_th%2][(current_y_t/2) % 16] = (1.0/8.0f)*f_cache_t[block][local_th];
+            //parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] = (1.0/8.0f)*f_cache_t[block][local_th];
+            //parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] +=1;
 
         }
 
@@ -1029,6 +1052,17 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
                     particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16] +  parent_cache[2][current_y_p%16]
                                                                                                   + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16];
+
+
+                    parent_cache[0][current_y_p%16]=0;
+                    parent_cache[1][current_y_p%16]=0;
+                    parent_cache[2][current_y_p%16]=0;
+                    parent_cache[3][current_y_p%16]=0;
+                    parent_cache[4][current_y_p%16]=0;
+                    parent_cache[5][current_y_p%16]=0;
+                    parent_cache[6][current_y_p%16]=0;
+                    parent_cache[7][current_y_p%16]=0;
+
                 }
             }
 
