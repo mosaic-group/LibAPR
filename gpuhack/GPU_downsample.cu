@@ -662,7 +662,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     __shared__ float f_cache[5][32];
     __shared__ int y_cache[5][32];
 
-    __shared__ float parent_cache[2][16];
+    __shared__ float parent_cache[8][16];
 
     //initialization to zero
     f_cache[block][local_th]=0;
@@ -744,9 +744,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
             if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
                 f_cache[block][local_th] = particle_data_input[sparse_block * 32 + global_index_begin_0 +
                                                                local_th];
-            }
 
-            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
                 y_cache[block][local_th] = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
             }
 
@@ -755,66 +753,70 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         current_y = y_cache[block][local_th];
         __syncthreads();
 
-        if(block < 2){
-            //block 0 or 1
-            uint16_t local_y =  y_cache[2*block][local_th];
-
-            if(local_th%2==0) {
-                //this here needs to be dealt with..
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-                    //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
-                    local_y = (local_y/2);
-                    //parent_cache[block][(local_y) % 16] = (local_y);
-                    //parent_cache[block][(local_y) % 16] = 1;
-                    parent_cache[block][(local_y) % 16] = (1.0/8.0f)*f_cache[2*block][local_th];
-
-                    //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
-                }
-
-                //next threads work
-                local_y =  y_cache[2*block][local_th+1];
-
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-                    //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
-                    local_y = (local_y/2);
-                    //parent_cache[block][(local_y) % 16] = (local_y);
-                    //parent_cache[block][(local_y) % 16] += 1;
-                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block][local_th+1];
-
-
-                    //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
-                }
-
-                //next threads work
-                local_y =  y_cache[2*block+1][local_th];
-
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-                    //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
-                    local_y = (local_y/2);
-                    //parent_cache[block][(local_y) % 16] = (local_y);
-                    //parent_cache[block][(local_y) % 16] += 1;
-                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
-
-                    //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
-                }
-
-                //next threads work
-                local_y =  y_cache[2*block+1][local_th+1];
-
-                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
-                    //parent_cache[block][(local_y/ 2) % 16] += (1.0/8.0f)*f_cache[2*block][local_th];
-                    local_y = (local_y/2);
-                    //parent_cache[block][(local_y) % 16] = (local_y);
-                    //parent_cache[block][(local_y) % 16] += 1;
-                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th+1];
-
-                    //parent_cache[block][(local_y/ 2) % 16] = f_cache[2*block][local_th];
-                }
-            }
+//        if(block < 2){
+//            //block 0 or 1
+//            uint16_t local_y =  y_cache[2*block][local_th];
+//
+//            if(local_th%2==0) {
+//                //this here needs to be dealt with..
+//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+//
+//                    local_y = (local_y/2);
+//
+//                    parent_cache[block][(local_y) % 16] = (1.0/8.0f)*f_cache[2*block][local_th];
+//
+//
+//                }
+//
+//                //next threads work
+//                local_y =  y_cache[2*block][local_th+1];
+//
+//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+//
+//                    local_y = (local_y/2);
+//
+//                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block][local_th+1];
+//
+//
+//                }
+//
+//                //next threads work
+//                local_y =  y_cache[2*block+1][local_th];
+//
+//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+//
+//                    local_y = (local_y/2);
+//
+//                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
+//
+//                }
+//
+//                //next threads work
+//                local_y =  y_cache[2*block+1][local_th+1];
+//
+//                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+//
+//                    local_y = (local_y/2);
+//
+//                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th+1];
+//
+//                }
+//            }
+//
+//
+//        }
 
 
+        if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
-        } else if (block==2){
+            parent_cache[2*block+local_th%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
+
+        }
+
+
+
+
+        if (block==2){
 
             if (current_y_p < ((y_block * 32)/2)) {
                 sparse_block_p++;
@@ -850,7 +852,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
             if (current_y_p < ((y_block+1) * 32)/2) {
                 if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
 
-                    particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16];
+                    particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16] +  parent_cache[2][current_y_p%16]
+                                                                                                  + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16];
 
                 }
             }
