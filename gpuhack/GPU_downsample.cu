@@ -123,6 +123,19 @@ __global__ void down_sample_y_update(const std::size_t *row_info,
                                      const std::uint16_t* level_y_num,
                                      const std::size_t level);
 
+__global__ void down_sample_avg_interior(const std::size_t *row_info,
+                                         const std::uint16_t *particle_y,
+                                         const std::size_t* level_offset,
+                                         const std::uint16_t *particle_data_input,
+                                         const std::size_t *row_info_child,
+                                         const std::uint16_t *particle_y_child,
+                                         const std::size_t* level_offset_child,
+                                         std::float_t *particle_data_output,
+                                         const std::uint16_t* level_x_num,
+                                         const std::uint16_t* level_z_num,
+                                         const std::uint16_t* level_y_num,
+                                         const std::size_t level);
+
 
 ExtraParticleData<float> meanDownsamplingOld(APR<uint16_t> &aInputApr, APRTree<uint16_t> &aprTree) {
     APRIterator<uint16_t> aprIt(aInputApr);
@@ -271,21 +284,39 @@ int main(int argc, char **argv) {
 
                 dim3 blocks_l(x_blocks, 1, z_blocks);
 
-                down_sample_avg <<< blocks_l, threads_l >>>
-                                                       (gpuaprAccess.gpu_access.row_global_index,
-                                                               gpuaprAccess.gpu_access.y_part_coord,
-                                                               gpuaprAccess.gpu_access.level_offsets,
-                                                               apr.particles_intensities.gpu_pointer,
-                                                               gpuaprAccessTree.gpu_access.row_global_index,
-                                                               gpuaprAccessTree.gpu_access.y_part_coord,
-                                                               gpuaprAccessTree.gpu_access.level_offsets,
-                                                               tree_mean_gpu.gpu_pointer,
-                                                               gpuaprAccess.gpu_access.level_x_num,
-                                                               gpuaprAccess.gpu_access.level_z_num,
-                                                               gpuaprAccess.gpu_access.level_y_num,
-                                                               level);
+                if(level==apr.level_max()) {
+
+                    down_sample_avg << < blocks_l, threads_l >> >
+                                                   (gpuaprAccess.gpu_access.row_global_index,
+                                                           gpuaprAccess.gpu_access.y_part_coord,
+                                                           gpuaprAccess.gpu_access.level_offsets,
+                                                           apr.particles_intensities.gpu_pointer,
+                                                           gpuaprAccessTree.gpu_access.row_global_index,
+                                                           gpuaprAccessTree.gpu_access.y_part_coord,
+                                                           gpuaprAccessTree.gpu_access.level_offsets,
+                                                           tree_mean_gpu.gpu_pointer,
+                                                           gpuaprAccess.gpu_access.level_x_num,
+                                                           gpuaprAccess.gpu_access.level_z_num,
+                                                           gpuaprAccess.gpu_access.level_y_num,
+                                                           level);
 
 
+                } else {
+
+                    down_sample_avg_interior<< < blocks_l, threads_l >> >
+                                                           (gpuaprAccess.gpu_access.row_global_index,
+                                                                   gpuaprAccess.gpu_access.y_part_coord,
+                                                                   gpuaprAccess.gpu_access.level_offsets,
+                                                                   apr.particles_intensities.gpu_pointer,
+                                                                   gpuaprAccessTree.gpu_access.row_global_index,
+                                                                   gpuaprAccessTree.gpu_access.y_part_coord,
+                                                                   gpuaprAccessTree.gpu_access.level_offsets,
+                                                                   tree_mean_gpu.gpu_pointer,
+                                                                   gpuaprAccess.gpu_access.level_x_num,
+                                                                   gpuaprAccess.gpu_access.level_z_num,
+                                                                   gpuaprAccess.gpu_access.level_y_num,
+                                                                   level);
+                }
                 cudaDeviceSynchronize();
             }
         }
@@ -820,9 +851,271 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                 if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
 
                     particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16];
-                    //particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16];
-                    //particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = current_y_p;
-                    //particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] += 1;
+
+                }
+            }
+
+        }
+    }
+
+
+
+}
+
+__global__ void down_sample_avg_interior(const std::size_t *row_info,
+                                const std::uint16_t *particle_y,
+                                const std::size_t* level_offset,
+                                const std::uint16_t *particle_data_input,
+                                const std::size_t *row_info_child,
+                                const std::uint16_t *particle_y_child,
+                                const std::size_t* level_offset_child,
+                                std::float_t *particle_data_output,
+                                const std::uint16_t* level_x_num,
+                                const std::uint16_t* level_z_num,
+                                const std::uint16_t* level_y_num,
+                                const std::size_t level) {
+    //
+    //  This step is required for the interior down-sampling
+    //
+
+    const int x_num = level_x_num[level];
+    const int y_num = level_y_num[level];
+    const int z_num = level_z_num[level];
+
+    const int x_num_p = level_x_num[level-1];
+    const int y_num_p = level_y_num[level-1];
+    const int z_num_p = level_z_num[level-1];
+
+    int x_index = (2 * blockIdx.x + threadIdx.x/64);
+    int z_index = (2 * blockIdx.z + ((threadIdx.x+31)/32)%2);
+
+    int x_index_p = blockIdx.x;
+    int z_index_p = blockIdx.z;
+
+    int block = threadIdx.x/32;
+    int local_th = (threadIdx.x%32);
+
+    std::size_t row_index_p =x_index_p + z_index_p*x_num_p + level_offset_child[level-1];
+
+    std::size_t row_index =x_index + z_index*x_num + level_offset[level];
+
+    //Particles
+    std::size_t global_index_begin_0;
+    std::size_t global_index_end_0;
+
+    //Parent Tree Particle Cells
+    std::size_t global_index_begin_p;
+    std::size_t global_index_end_p;
+
+    //Interior Tree Particle Cells
+    std::size_t global_index_begin_t;
+    std::size_t global_index_end_t;
+
+    //shared memory caches
+    __shared__ float f_cache[5][32];
+    __shared__ int y_cache[5][32];
+
+    __shared__ float f_cache_t[4][32];
+    __shared__ int y_cache_t[4][32];
+
+    __shared__ float parent_cache[8][16];
+
+    //initialization to zero
+    f_cache[block][local_th]=0;
+    y_cache[block][local_th]=0;
+
+    if(block==0){
+        f_cache[4][local_th]=0;
+        y_cache[4][local_th]=0;
+        parent_cache[0][local_th/2]=1;
+    }
+
+    int current_y=0;
+    int current_y_p=0;
+    int current_y_t=0;
+
+    if((x_index >= x_num) || (z_index >= z_num) ){
+
+        global_index_begin_0 = 1;
+        global_index_end_0 = 0;
+
+        global_index_begin_t = 1;
+        global_index_end_t = 0;
+
+        // return; //out of bounds
+    } else {
+        get_row_begin_end(&global_index_begin_t, &global_index_end_t, row_index, row_info_child);
+        get_row_begin_end(&global_index_begin_0, &global_index_end_0, row_index, row_info);
+
+    }
+
+
+    std::uint16_t number_y_chunk = (y_num+31)/32;
+
+
+    //initialize (i=0)
+    if (global_index_begin_0 + local_th < global_index_end_0) {
+
+        y_cache[block][local_th] = particle_y[global_index_begin_0 + local_th];
+
+        f_cache[block][local_th] = particle_data_input[global_index_begin_0 + local_th];
+
+    }
+
+    //tree interior
+    if (global_index_begin_t + local_th < global_index_end_t) {
+
+        y_cache_t[block][local_th] = particle_y_child[global_index_begin_t + local_th];
+
+        f_cache_t[block][local_th] = particle_data_output[global_index_begin_t + local_th];
+
+    }
+
+
+    if (block==2){
+
+        if ((  global_index_begin_p + local_th) < global_index_end_p) {
+            f_cache[4][local_th] = particle_data_output[ global_index_begin_p + local_th];
+        }
+
+    } else if (block == 3) {
+
+        if (( global_index_begin_p + local_th) < global_index_end_p) {
+
+            y_cache[4][local_th] = particle_y_child[ global_index_begin_p + local_th];
+
+        }
+
+    }
+
+    current_y = y_cache[block][local_th ];
+    current_y_p = y_cache[4][local_th ];
+    current_y_t = y_cache_t[block][local_th ];
+
+    uint16_t sparse_block = 0;
+    int sparse_block_p =0;
+    int sparse_block_t =0;
+
+    for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
+
+        //__syncthreads();
+        //value less then current chunk then update.
+        if (current_y < y_block * 32) {
+            sparse_block++;
+            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+                f_cache[block][local_th] = particle_data_input[sparse_block * 32 + global_index_begin_0 +
+                                                               local_th];
+
+                y_cache[block][local_th] = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
+            }
+
+        }
+        current_y = y_cache[block][local_th];
+
+        //interior tree update
+        if (current_y_t < y_block * 32) {
+            sparse_block_t++;
+            if (sparse_block_t * 32 + global_index_begin_t + local_th < global_index_end_t) {
+                f_cache_t[block][local_th] = particle_data_output[sparse_block_t * 32 + global_index_begin_t +
+                                                               local_th];
+
+                y_cache_t[block][local_th] = particle_y_child[sparse_block_t * 32 + global_index_begin_t + local_th];
+            }
+
+        }
+        current_y_t = y_cache_t[block][local_th];
+
+
+        __syncthreads();
+
+        if(block < 2){
+            //block 0 or 1
+            uint16_t local_y =  y_cache[2*block][local_th];
+
+            if(local_th%2==0) {
+                //this here needs to be dealt with..
+                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+
+                    local_y = (local_y/2);
+
+                    parent_cache[block][(local_y) % 16] = (1.0/8.0f)*f_cache[2*block][local_th];
+
+                }
+
+                //next threads work
+                local_y =  y_cache[2*block][local_th+1];
+
+                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+
+                    local_y = (local_y/2);
+
+                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block][local_th+1];
+
+
+                }
+
+                //next threads work
+                local_y =  y_cache[2*block+1][local_th];
+
+                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+
+                    local_y = (local_y/2);
+
+                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th];
+
+                }
+
+                //next threads work
+                local_y =  y_cache[2*block+1][local_th+1];
+
+                if ((local_y < (y_block + 1) * 32) && (local_y >= (y_block) * 32)) {
+
+                    local_y = (local_y/2);
+
+                    parent_cache[block][(local_y) % 16] += (1.0/8.0f)*f_cache[2*block+1][local_th+1];
+
+                }
+            }
+
+
+
+        } else if (block==2){
+
+            if (current_y_p < ((y_block * 32)/2)) {
+                sparse_block_p++;
+
+                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
+                    f_cache[4][local_th] = particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th];
+
+                }
+
+
+            }
+        } else if (block == 3) {
+            if (current_y_p < ((y_block * 32)/2)) {
+                sparse_block_p++;
+
+
+                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
+
+                    y_cache[4][local_th] = particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
+
+                }
+
+            }
+
+
+        }
+        __syncthreads();
+        current_y_p = y_cache[4][local_th];
+
+        if(block ==3) {
+            //output
+
+            if (current_y_p < ((y_block+1) * 32)/2) {
+                if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
+
+                    particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16];
 
                     parent_cache[0][current_y_p%16]=0;
                     parent_cache[1][current_y_p%16]=0;
@@ -838,116 +1131,3 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
 
 
-
-
-__global__ void shared_update(const std::size_t *row_info,
-                              const std::uint16_t *particle_y,
-                              const std::uint16_t *particle_data_input,
-                              std::uint16_t *particle_data_output,
-                              const std::size_t offset,
-                              const std::size_t x_num,
-                              const std::size_t z_num,
-                              const std::size_t y_num,
-                              const std::size_t level) {
-
-    const unsigned int N = 1;
-    const unsigned int N_t = N+2;
-
-
-    __shared__ int local_patch[10][10][N+7]; // This is block wise shared memory this is assuming an 8*8 block with pad()
-
-    uint16_t y_cache[N]={0}; // These are local register/private caches
-    uint16_t index_cache[N]={0}; // These are local register/private caches
-
-    if(threadIdx.x >= 10){
-        return;
-    }
-    if(threadIdx.z >= 10){
-        return;
-    }
-
-
-    int x_index = (8 * blockIdx.x + threadIdx.x - 1);
-    int z_index = (8 * blockIdx.z + threadIdx.z - 1);
-
-    bool not_ghost=false;
-
-    if((threadIdx.x > 0) && (threadIdx.x < 9) && (threadIdx.z > 0) && (threadIdx.z < 9)){
-        not_ghost = true;
-    }
-
-
-    if((x_index >= x_num) || (x_index < 0)){
-        return; //out of bounds
-    }
-
-    if((z_index >= z_num) || (z_index < 0)){
-        return; //out of bounds
-    }
-
-    int current_row = offset + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
-
-
-    std::size_t particle_global_index_begin;
-    std::size_t particle_global_index_end;
-
-    particle_global_index_end = (row_info[current_row]);
-
-    if (current_row == 0) {
-        particle_global_index_begin = 0;
-    } else {
-        particle_global_index_begin = (row_info[current_row-1]);
-    }
-
-    std::size_t y_block = 1;
-    std::size_t y_counter = 0;
-
-    std::size_t particle_global_index = particle_global_index_begin;
-    while( particle_global_index < particle_global_index_end){
-
-        uint16_t current_y = particle_y[particle_global_index];
-
-        while(current_y >= y_block*N){
-            //threads need to wait for there progression
-            __syncthreads();
-            y_block++;
-
-            //Do the cached loop
-            //T->P to
-
-            for (int i = 0; i < y_counter; ++i) {
-                if(not_ghost) {
-                    particle_data_output[particle_global_index_begin +
-                                         index_cache[i]] = local_patch[threadIdx.z][threadIdx.x][(y_cache[i]) % N];
-                }
-            }
-
-            y_counter=0;
-        }
-
-
-        //P->T
-        local_patch[threadIdx.z][threadIdx.x][current_y % N ] = particle_data_input[particle_global_index];
-
-        //caching for update loop
-        index_cache[y_counter]=(particle_global_index-particle_global_index_begin);
-        y_cache[y_counter]=current_y;
-        y_counter++;
-
-        //global index update
-        particle_global_index++;
-
-    }
-
-
-    //do i need a last exit loop?
-    __syncthreads();
-    for (int i = 0; i < y_counter; ++i) {
-        if(not_ghost) {
-            particle_data_output[particle_global_index_begin +
-                                 index_cache[i]] = local_patch[threadIdx.z][threadIdx.x][
-                    (y_cache[i]) % N];
-        }
-    }
-
-}
