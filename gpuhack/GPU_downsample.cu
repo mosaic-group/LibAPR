@@ -451,17 +451,17 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         treeIt.set_iterator_to_particle_by_number(particle_number);
 
-        if(tree_mean_gpu[treeIt]==tree_counter_int[treeIt]){
+        if(tree_mean_gpu[treeIt]==(tree_counter_int[treeIt]+tree_counter_part[treeIt])){
         //if(tree_mean_gpu[treeIt]==treeIt.y()){
         //if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.1){
         //if(tree_mean_gpu[treeIt]==2*number_reps){
-            if(treeIt.level() == (treeIt.level_min()+1)) {
+            if(treeIt.level() > (treeIt.level_min())) {
                 c_pass++;
             }
         } else {
             //c_fail++;
 
-            if(treeIt.level() == (treeIt.level_min()+1)) {
+            if(treeIt.level() > (treeIt.level_min())) {
                 if (output_c < 200) {
                     std::cout << "Expected: " << (int)tree_counter_int[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
                               << " z: " << treeIt.z() << " y: " << treeIt.y() << " global index: " << (int) treeIt.global_index() << std::endl;
@@ -558,7 +558,8 @@ __global__ void down_sample_y_update(const std::size_t *row_info,
     const int z_num_p = level_z_num[level-1];
 
     int x_index = (2 * blockIdx.x + threadIdx.x/64);
-    int z_index = (2 * blockIdx.z + ((threadIdx.x+31)/32)%2);
+    int z_index = (2 * blockIdx.z + ((threadIdx.x)/32)%2);
+
 
     int block = threadIdx.x/32;
     int local_th = (threadIdx.x%32);
@@ -677,7 +678,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     const int z_num_p = level_z_num[level-1];
 
     int x_index = (2 * blockIdx.x + threadIdx.x/64);
-    int z_index = (2 * blockIdx.z + ((threadIdx.x+31)/32)%2);
+    int z_index = (2 * blockIdx.z + ((threadIdx.x)/32)%2);
+
 
     int x_index_p = blockIdx.x;
     int z_index_p = blockIdx.z;
@@ -893,13 +895,15 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
     const int z_num_p = level_z_num[level-1];
 
     int x_index = (2 * blockIdx.x + threadIdx.x/64);
-    int z_index = (2 * blockIdx.z + ((threadIdx.x+31)/32)%2);
+    int z_index = (2 * blockIdx.z + ((threadIdx.x)/32)%2);
+
 
     int x_index_p = blockIdx.x;
     int z_index_p = blockIdx.z;
 
     int block = threadIdx.x/32;
     int local_th = (threadIdx.x%32);
+
 
     std::size_t row_index_p =x_index_p + z_index_p*x_num_p + level_offset_child[level-1];
 
@@ -968,7 +972,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
 
     //initialize (i=0)
-    if (global_index_begin_0 + local_th < global_index_end_0) {
+    if ((global_index_begin_0 + local_th) < global_index_end_0) {
 
         y_cache[block][local_th] = particle_y[global_index_begin_0 + local_th];
 
@@ -977,7 +981,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
     }
 
     //tree interior
-    if (global_index_begin_t + local_th < global_index_end_t) {
+    if ((global_index_begin_t + local_th) < global_index_end_t) {
 
         y_cache_t[block][local_th] = particle_y_child[global_index_begin_t + local_th];
 
@@ -1012,9 +1016,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
     int sparse_block_p =0;
     int sparse_block_t =0;
 
-    if(level==4 && x_index_p ==0 && z_index_p==6 & (y_cache_t[block][local_th]/2 ==1)){
-        printf("hello from thread: %d in block %d\n",(int) local_th,(int) block);
-    }
+
 
 
 
@@ -1024,7 +1026,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         //value less then current chunk then update.
         if (current_y < y_block * 32) {
             sparse_block++;
-            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+            if ((sparse_block * 32 + global_index_begin_0 + local_th) < global_index_end_0) {
                 f_cache[block][local_th] = particle_data_input[sparse_block * 32 + global_index_begin_0 +
                                                                local_th];
 
@@ -1037,10 +1039,10 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         //interior tree update
         if (current_y_t < y_block * 32) {
             sparse_block_t++;
-            if (sparse_block_t * 32 + global_index_begin_t + local_th < global_index_end_t) {
+            if ((sparse_block_t * 32 + global_index_begin_t + local_th) < global_index_end_t) {
 
                 f_cache_t[block][local_th] = particle_data_output[sparse_block_t * 32 + global_index_begin_t +
-                                                               local_th];
+                                                              local_th];
 
                 y_cache_t[block][local_th] = particle_y_child[sparse_block_t * 32 + global_index_begin_t + local_th];
 
@@ -1055,29 +1057,20 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
             //parent_cache[2*block+current_y%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
-            //parent_cache[2*block+current_y%2][(current_y/2) % 16] += 1;
+            parent_cache[2*block+current_y%2][(current_y/2) % 16] += 1;
 
         }
         __syncthreads();
 
-        if(level==4 && x_index_p ==0 && z_index_p==6 & (y_cache_t[block][local_th]/2 ==1)){
-            printf("2nd hello from thread: %d in block %d\n",(int) local_th,(int) block);
-        }
 
 
         //now the interior tree nodes
         if ((current_y_t < (y_block + 1) * 32) && (current_y_t >= (y_block) * 32)) {
 
-            if(level==4 && x_index_p ==0 && z_index_p==6 & (y_cache_t[block][local_th]/2 ==1)){
-                printf("3rd hello from thread: %d in block %d with cache index: %d\n",(int) local_th,(int) block,(int) 2*block+local_th%2);
-            }
-
 
             //parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] = (1.0/8.0f)*f_cache_t[block][local_th];
             parent_cache[2*block+local_th%2][(current_y_t/2) % 16] +=1;
             //parent_cache[0][(current_y_t/2) % 16] = current_y_t/2;
-
-
 
 
         }
@@ -1118,7 +1111,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
             current_y_p = y_cache[4][local_th];
 
             if (current_y_p < ((y_block+1) * 32)/2 && current_y_p >= ((y_block) * 32)/2) {
-                if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
+                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
 
                     particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16] + parent_cache[1][current_y_p%16] +  parent_cache[2][current_y_p%16]
                                                                                                   + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16];
