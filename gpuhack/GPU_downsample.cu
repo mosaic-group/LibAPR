@@ -263,7 +263,7 @@ int main(int argc, char **argv) {
 
 
 
-    for (int i = 0; i < 1; ++i) {
+    for (int i = 0; i < 3; ++i) {
 
         timer.start_timer("summing the sptial informatino for each partilce on the GPU");
         for (int rep = 0; rep < number_reps; ++rep) {
@@ -456,13 +456,13 @@ int main(int argc, char **argv) {
         //if(tree_mean_gpu[treeIt]==treeIt.y()){
         if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.1){
         //if(tree_mean_gpu[treeIt]==2*number_reps){
-            if(treeIt.level() == (treeIt.level_max())) {
+            if(treeIt.level() > (treeIt.level_min())) {
                 c_pass++;
             }
         } else {
             //c_fail++;
 
-            if(treeIt.level() == (treeIt.level_max())) {
+            if(treeIt.level() > (treeIt.level_min())) {
                 if (output_c < 2000) {
                     std::cout << "Expected: " << (int)ds_parts[treeIt] << " Recieved: " << tree_mean_gpu[treeIt] << " Level: " << treeIt.level() << " x: " << treeIt.x()
                               << " z: " << treeIt.z() << " y: " << treeIt.y() << " global index: " << (int) treeIt.global_index() << std::endl;
@@ -721,7 +721,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
     //initialization to zero
     f_cache[block][local_th]=0;
-    y_cache[block][local_th]=0;
+    y_cache[block][local_th]=-1;
 
     if(block==0){
         f_cache[4][local_th]=0;
@@ -730,7 +730,6 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     }
     parent_cache[2*block][local_th/2]=0;
     parent_cache[2*block+1][local_th/2]=0;
-
 
     int current_y=0;
     int current_y_p=0;
@@ -762,9 +761,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     //initialize (i=0)
     if (global_index_begin_0 + local_th < global_index_end_0) {
         f_cache[block][local_th] = particle_data_input[global_index_begin_0 + local_th];
-    }
 
-    if ( global_index_begin_0 + local_th < global_index_end_0) {
         y_cache[block][local_th] = particle_y[ global_index_begin_0 + local_th];
     }
 
@@ -875,9 +872,11 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                     }
                 }
             }
+
         }
         __syncthreads();
-
+        parent_cache[2*block][local_th/2]=0;
+        parent_cache[2*block+1][local_th/2]=0;
 
 
     }
@@ -1098,7 +1097,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         if ((current_y_t < (y_block + 1) * 32) && (current_y_t >= (y_block) * 32)) {
 
             parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] = (1.0/8.0f)*f_cache_t[block][local_th];
-            //parent_cache[2*block+local_th%2][(current_y_t/2) % 16] +=1;
+            //parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] +=1;
             //parent_cache[0][(current_y_t/2) % 16] = current_y_t/2;
 
 
@@ -1158,7 +1157,8 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         }
 
         __syncthreads();
-
+        parent_cache[2*block][local_th/2]=0;
+        parent_cache[2*block+1][local_th/2]=0;
 
     }
 
