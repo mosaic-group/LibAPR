@@ -672,8 +672,9 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     if(block==0){
         f_cache[4][local_th]=0;
         y_cache[4][local_th]=0;
-        parent_cache[0][local_th/2]=0;
+
     }
+    parent_cache[block][local_th/2]=0;
 
     int current_y=0;
     int current_y_p=0;
@@ -759,11 +760,11 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
             //parent_cache[2*block+local_th%2][(current_y/2) % 16] = (1.0/8.0f)*f_cache[block][local_th];
-            parent_cache[2*block+local_th%2][(current_y/2) % 16] +=1;
+            parent_cache[2*block+current_y%2][(current_y/2) % 16] +=1;
 
         }
 
-
+        __syncthreads();
         //fetch the parent particle data
         if (block==2){
 
@@ -807,17 +808,18 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                 }
             }
 
-            parent_cache[0][local_th%16]=0;
-            parent_cache[1][local_th%16]=0;
-            parent_cache[2][local_th%16]=0;
-            parent_cache[3][local_th%16]=0;
-            parent_cache[4][local_th%16]=0;
-            parent_cache[5][local_th%16]=0;
-            parent_cache[6][local_th%16]=0;
-            parent_cache[7][local_th%16]=0;
+
 
         }
-
+        __syncthreads();
+        parent_cache[0][local_th%16]=0;
+        parent_cache[1][local_th%16]=0;
+        parent_cache[2][local_th%16]=0;
+        parent_cache[3][local_th%16]=0;
+        parent_cache[4][local_th%16]=0;
+        parent_cache[5][local_th%16]=0;
+        parent_cache[6][local_th%16]=0;
+        parent_cache[7][local_th%16]=0;
 
 
     }
