@@ -822,16 +822,16 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         //fetch the parent particle data
         if (block==2){
 
-//            if (current_y_p < ((y_block * 32)/2)) {
-//                sparse_block_p++;
-//
-//                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
-//                    f_cache[4][local_th] = particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th];
-//
-//                }
-//
-//
-//            }
+            if (current_y_p < ((y_block * 32)/2)) {
+                sparse_block_p++;
+
+                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
+                    f_cache[4][local_th] = particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th];
+
+                }
+
+
+            }
         } else if (block == 3) {
             if (current_y_p < ((y_block * 32)/2)) {
                 sparse_block_p++;
@@ -1107,16 +1107,16 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
        if (block==2){
 
-//            if (current_y_p < ((y_block * 32)/2)) {
-//                sparse_block_p++;
-//
-//                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
-//                    f_cache[4][local_th] = particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th];
-//
-//                }
-//
-//
-//            }
+            if (current_y_p < ((y_block * 32)/2)) {
+                sparse_block_p++;
+
+                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
+                    f_cache[4][local_th] = particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th];
+
+                }
+
+
+            }
         } else if (block == 3) {
             if (current_y_p < ((y_block * 32)/2)) {
                 sparse_block_p++;
