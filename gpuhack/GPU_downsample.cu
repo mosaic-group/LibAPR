@@ -763,7 +763,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     }
 
 
-    if (block == 3) {
+    //if (block == 3) {
 
         if (( global_index_begin_p + local_th) < global_index_end_p) {
 
@@ -772,7 +772,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
         }
 
-    }
+   // }
 
     //current_y = y_cache[block][local_th ];
     //current_y_p = y_cache[4][local_th ];
@@ -810,7 +810,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
         __syncthreads();
         //fetch the parent particle data
-       if (block == 3) {
+      // if (block == 3) {
             if (current_y_p < ((y_block * 32)/2)) {
                 sparse_block_p++;
 
@@ -824,7 +824,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
             }
 
 
-        }
+       // }
         __syncthreads();
         //current_y_p = y_cache[4][local_th];
 
@@ -1006,7 +1006,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
 
 
-    if (block == 3) {
+   // if (block == 3) {
 
         if (( global_index_begin_p + local_th) < global_index_end_p) {
 
@@ -1014,7 +1014,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
         }
 
-    }
+   // }
 
     uint16_t sparse_block = 0;
     int sparse_block_p =0;
@@ -1086,7 +1086,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         }
         __syncthreads();
 
-    if (block == 3) {
+    //if (block == 3) {
             if (current_y_p < ((y_block * 32)/2)) {
                 sparse_block_p++;
 
@@ -1101,7 +1101,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
             }
 
 
-       }
+       //}
         __syncthreads();
 
 
