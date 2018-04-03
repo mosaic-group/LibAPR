@@ -713,10 +713,11 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     std::size_t global_index_begin_p;
     std::size_t global_index_end_p;
 
-
+    //remove these with registers
     __shared__ float f_cache[5][32];
     __shared__ int y_cache[5][32];
 
+    //keep these
     __shared__ float parent_cache[8][16];
 
     //initialization to zero
@@ -800,12 +801,12 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                 f_cache[block][local_th] = particle_data_input[sparse_block * 32 + global_index_begin_0 +
                                                                local_th];
 
-                y_cache[block][local_th] = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
+                current_y = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
             }
 
         }
 
-        current_y = y_cache[block][local_th];
+        //current_y = y_cache[block][local_th];
         __syncthreads();
 
 
@@ -838,7 +839,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
                 if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
 
-                    y_cache[4][local_th] = particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
+                    current_y_p = particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
 
                 }
 
@@ -847,7 +848,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
         }
         __syncthreads();
-        current_y_p = y_cache[4][local_th];
+        //current_y_p = y_cache[4][local_th];
 
         if(block ==3) {
             //output
@@ -1145,12 +1146,15 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
                                 scale_factor_yxz*(parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
                                 parent_cache[2][current_y_p % 16]  + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16]);
+
                     }else{
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
                                 scale_factor_xz*(parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
                                  parent_cache[2][current_y_p % 16]  + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16]);
+
                     }
-                    //particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] = parent_cache[0][current_y_p%16];
+
+
                 }
             }
 
