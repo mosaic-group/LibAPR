@@ -1020,7 +1020,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
     int sparse_block_p =0;
     int sparse_block_t =0;
 
-
+    float local_sum = 0;
 
 
 
@@ -1101,8 +1101,11 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
             }
 
 
-        }
+       }
         __syncthreads();
+
+
+        //local_sum
 
 
         if(block ==3) {
