@@ -416,7 +416,7 @@ int main(int argc, char **argv) {
                 std::size_t z_num = apr.spatial_index_z_max(level);
                 std::size_t y_num = apr.spatial_index_y_max(level);
 
-                dim3 threads_l(2, 1, 2);
+                dim3 threads_l(128, 1, 1);
 
                 int x_blocks = (x_num + 2 - 1) / 2;
                 int z_blocks = (z_num + 2 - 1) / 2;
@@ -495,14 +495,19 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
         //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
-        if(spatial_info_test3[aprIt]==output[aprIt]){
-            c_pass++;
-        } else {
-            c_fail++;
-            success = false;
+        //if(spatial_info_test3[aprIt]==output[aprIt]){
+        //if(spatial_info_test3[aprIt]==aprIt.y()){
+        if(spatial_info_test3[aprIt]==aprIt.y()){
             if(aprIt.level() == aprIt.level_max()) {
-                if (output_c < 1) {
-                    std::cout << "Expected: " << output[aprIt] << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
+                c_pass++;
+            }
+        } else {
+            if(aprIt.level() == aprIt.level_max()) {
+                c_fail++;
+                success = false;
+
+                if (output_c < 1000) {
+                    std::cout << "Expected: " << aprIt.y() << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
                               << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
                     output_c++;
                 }
@@ -599,8 +604,6 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     __shared__ std::float_t local_patch[4][32]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
-    const int y_num_p = level_y_num[level-1];
-
 
     const int x_index = (2 * blockIdx.x + threadIdx.x/64);
     const int z_index = (2 * blockIdx.z + ((threadIdx.x)/32)%2);
@@ -609,6 +612,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     const int block = threadIdx.x/32;
     const int local_th = (threadIdx.x%32);
 
+    local_patch[block][local_th]=0;
 
     std::size_t global_index_begin_0;
     std::size_t global_index_end_0;
@@ -648,28 +652,24 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
 
     //initialize (i=0)
-    if (global_index_begin_0 + local_th < global_index_end_0) {
+    if ((global_index_begin_0 + local_th) < global_index_end_0) {
         current_val = particle_data_input[global_index_begin_0 + local_th];
 
-        //y_cache[block][local_th] = particle_y[ global_index_begin_0 + local_th];
         current_y =  particle_y[ global_index_begin_0 + local_th];
+
+        local_patch[block][current_y%32] = current_y;
     }
 
 
-    if (block == 3) {
 
-        if (( global_index_begin_p + local_th) < global_index_end_p) {
 
-            //y_cache[4][local_th] = particle_y_child[ global_index_begin_p + local_th];
-            current_y_p = particle_y[ global_index_begin_p + local_th];
-            current_val_p = particle_data_input[ global_index_begin_p + local_th];
+    if (( global_index_begin_p + local_th) < global_index_end_p) {
 
-        }
+        current_y_p = particle_y[ global_index_begin_p + local_th];
+        current_val_p = particle_data_input[ global_index_begin_p + local_th];
 
     }
 
-    //current_y = y_cache[block][local_th ];
-    //current_y_p = y_cache[4][local_th ];
 
 
     uint16_t sparse_block = 0;
@@ -681,11 +681,14 @@ __global__ void shared_update_max(const std::size_t *row_info,
         //value less then current chunk then update.
         if (current_y < y_block * 32) {
             sparse_block++;
-            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+            if ((sparse_block * 32 + global_index_begin_0 + local_th) < global_index_end_0) {
                 current_val = particle_data_input[sparse_block * 32 + global_index_begin_0 +
                                                   local_th];
 
                 current_y = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
+
+
+
             }
 
         }
@@ -707,11 +710,15 @@ __global__ void shared_update_max(const std::size_t *row_info,
         }
 
         __syncthreads();
-        if (current_y < y_block * 32) {
+        if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
-            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+            local_patch[block][current_y%32] = current_y;
+
+            if ((sparse_block * 32 + global_index_begin_0 + local_th) < global_index_end_0) {
                 particle_data_output[sparse_block * 32 + global_index_begin_0 +
                                                   local_th] = local_patch[block][current_y%32];
+
+
 
             }
 

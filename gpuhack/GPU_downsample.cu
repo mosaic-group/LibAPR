@@ -755,7 +755,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
 
     //initialize (i=0)
-    if (global_index_begin_0 + local_th < global_index_end_0) {
+    if ((global_index_begin_0 + local_th) < global_index_end_0) {
         current_val = particle_data_input[global_index_begin_0 + local_th];
 
         //y_cache[block][local_th] = particle_y[ global_index_begin_0 + local_th];
@@ -787,7 +787,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         //value less then current chunk then update.
         if (current_y < y_block * 32) {
             sparse_block++;
-            if (sparse_block * 32 + global_index_begin_0 + local_th < global_index_end_0) {
+            if ((sparse_block * 32 + global_index_begin_0 + local_th) < global_index_end_0) {
                 current_val = particle_data_input[sparse_block * 32 + global_index_begin_0 +
                                                                local_th];
 
@@ -830,7 +830,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
             //output
 
             if (current_y_p < ((y_block+1) * 32)/2) {
-                if (sparse_block_p * 32 + global_index_begin_p + local_th < global_index_end_p) {
+                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
                     if(current_y_p == (y_num_p-1)) {
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
                                 scale_factor_yxz*( parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
