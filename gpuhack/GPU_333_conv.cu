@@ -587,9 +587,10 @@ int main(int argc, char **argv) {
         if(spatial_info_test3[aprIt]==output[aprIt]){
             c_pass++;
         } else {
-            c_fail++;
+
             success = false;
-            if(aprIt.level() <= aprIt.level_max()) {
+            if(aprIt.level() == aprIt.level_max()) {
+                c_fail++;
                 if (output_c < 200) {
                     std::cout << "Expected: " << output[aprIt] << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
                               << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
@@ -609,17 +610,17 @@ int main(int argc, char **argv) {
 
 
 
-    MeshData<uint16_t> check_mesh;
-
-    apr.interp_img(check_mesh,spatial_info_test3);
-
-    std::string image_file_name = options.directory +  "conv3_gpu.tif";
-    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
-
-    apr.interp_img(check_mesh,output);
-
-    image_file_name = options.directory +  "conv3_gt.tif";
-    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
+//    MeshData<uint16_t> check_mesh;
+//
+//    apr.interp_img(check_mesh,spatial_info_test3);
+//
+//    std::string image_file_name = options.directory +  "conv3_gpu.tif";
+//    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
+//
+//    apr.interp_img(check_mesh,output);
+//
+//    image_file_name = options.directory +  "conv3_gt.tif";
+//    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
 
 
 
@@ -721,6 +722,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
+        local_patch[threadIdx.z][threadIdx.x][3 ] = 0;
 
         return; //out of bounds
     }
