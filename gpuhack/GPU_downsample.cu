@@ -718,7 +718,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     //__shared__ int y_cache[5][32];
 
     //keep these
-    __shared__ float parent_cache[8][32];
+    //__shared__ float parent_cache[8][32];
+    __shared__ float parent_cache[32][8];
 
     float current_val = 0;
 
@@ -727,8 +728,12 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     //y_cache[block][local_th]=-1;
 
 
-    parent_cache[2*block][local_th/2]=0;
-    parent_cache[2*block+1][local_th/2]=0;
+    //parent_cache[2*block][local_th/2]=0;
+    //parent_cache[2*block+1][local_th/2]=0;
+
+    parent_cache[local_th/2][2*block]=0;
+    parent_cache[local_th/2][2*block+1]=0;
+
 
     int current_y=-1;
     int current_y_p=-1;
@@ -803,8 +808,10 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         //update the down-sampling caches
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
-            parent_cache[2*block+current_y%2][(current_y/2) % 16] = (1.0/8.0f)*current_val;
-            parent_cache[2*block+current_y%2][(current_y/2) % 16] = 1;
+//            parent_cache[2*block+current_y%2][(current_y/2) % 16] = (1.0/8.0f)*current_val;
+//            parent_cache[2*block+current_y%2][(current_y/2) % 16] = 1;
+
+            parent_cache[(current_y/2) % 16][2*block+current_y%2] = 1;
 
         }
 
@@ -834,22 +841,36 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                 if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
 
                     if(current_y_p == (y_num_p-1)) {
+//                        particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
+//                                scale_factor_yxz*( parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
+//                                parent_cache[2][current_y_p % 16]
+//                                + parent_cache[3][current_y_p % 16] + parent_cache[4][current_y_p % 16] +
+//                                parent_cache[5][current_y_p % 16] + parent_cache[6][current_y_p % 16] +
+//                                parent_cache[7][current_y_p % 16]);
+
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
-                                scale_factor_yxz*( parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
-                                parent_cache[2][current_y_p % 16]
-                                + parent_cache[3][current_y_p % 16] + parent_cache[4][current_y_p % 16] +
-                                parent_cache[5][current_y_p % 16] + parent_cache[6][current_y_p % 16] +
-                                parent_cache[7][current_y_p % 16]);
+                                scale_factor_yxz*( parent_cache[current_y_p % 16][0] + parent_cache[current_y_p % 16][1] +
+                                                   parent_cache[current_y_p % 16][2]
+                                                   + parent_cache[current_y_p % 16][3] + parent_cache[current_y_p % 16][4] +
+                                                   parent_cache[current_y_p % 16][5] + parent_cache[current_y_p % 16][6] +
+                                                   parent_cache[current_y_p % 16][7]);
 
 
 
                     } else {
+//                        particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
+//                                scale_factor_xz*( parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
+//                                  parent_cache[2][current_y_p % 16]
+//                                  + parent_cache[3][current_y_p % 16] + parent_cache[4][current_y_p % 16] +
+//                                  parent_cache[5][current_y_p % 16] + parent_cache[6][current_y_p % 16] +
+//                                  parent_cache[7][current_y_p % 16]);
+
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
-                                scale_factor_xz*( parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
-                                  parent_cache[2][current_y_p % 16]
-                                  + parent_cache[3][current_y_p % 16] + parent_cache[4][current_y_p % 16] +
-                                  parent_cache[5][current_y_p % 16] + parent_cache[6][current_y_p % 16] +
-                                  parent_cache[7][current_y_p % 16]);
+                                scale_factor_xz*( parent_cache[current_y_p % 16][0] + parent_cache[current_y_p % 16][1] +
+                                                   parent_cache[current_y_p % 16][2]
+                                                   + parent_cache[current_y_p % 16][3] + parent_cache[current_y_p % 16][4] +
+                                                   parent_cache[current_y_p % 16][5] + parent_cache[current_y_p % 16][6] +
+                                                   parent_cache[current_y_p % 16][7]);
 
 
                     }
