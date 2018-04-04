@@ -451,10 +451,10 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         treeIt.set_iterator_to_particle_by_number(particle_number);
 
-        //if(tree_mean_gpu[treeIt]==8){
+        if(tree_mean_gpu[treeIt]==8){
         //if(tree_mean_gpu[treeIt]==(tree_counter_int[treeIt]+tree_counter_part[treeIt])){
         //if(tree_mean_gpu[treeIt]==treeIt.y()){
-        if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.1){
+        //if(abs(tree_mean_gpu[treeIt]-ds_parts[treeIt])<0.1){
         //if(tree_mean_gpu[treeIt]==2*number_reps){
             if(treeIt.level() > (treeIt.level_min())) {
                 c_pass++;
@@ -804,6 +804,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
             parent_cache[2*block+current_y%2][(current_y/2) % 16] = (1.0/8.0f)*current_val;
+            parent_cache[2*block+current_y%2][(current_y/2) % 16] = 1;
 
         }
 
@@ -831,6 +832,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
             if (current_y_p < ((y_block+1) * 32)/2) {
                 if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
+
                     if(current_y_p == (y_num_p-1)) {
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
                                 scale_factor_yxz*( parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
@@ -856,7 +858,8 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
         }
         __syncthreads();
-
+        parent_cache[2*block][local_th/2] = 0;
+        parent_cache[2*block+1][local_th/2] = 0;
 
     }
 
@@ -1067,8 +1070,8 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         //update the down-sampling caches
         if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
 
-            parent_cache[2*block+current_y%2][(current_y/2) % 16] = (1.0/8.0f)*current_val;
-            //parent_cache[2*block+current_y%2][(current_y/2) % 16] += 1;
+            //parent_cache[2*block+current_y%2][(current_y/2) % 16] = (1.0/8.0f)*current_val;
+            parent_cache[2*block+current_y%2][(current_y/2) % 16] = 1;
 
         }
         __syncthreads();
@@ -1078,8 +1081,8 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         //now the interior tree nodes
         if ((current_y_t < (y_block + 1) * 32) && (current_y_t >= (y_block) * 32)) {
 
-            parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] = (1.0/8.0f)*current_val_t;
-            //parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] +=1;
+           // parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] = (1.0/8.0f)*current_val_t;
+            parent_cache[2*block+current_y_t%2][(current_y_t/2) % 16] =1;
             //parent_cache[0][(current_y_t/2) % 16] = current_y_t/2;
 
 
@@ -1103,7 +1106,6 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
             }
 
-
        }
 
 
@@ -1117,23 +1119,29 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         if(block ==3) {
             //output
             //current_y_p = y_cache[4][local_th];
-
-
+            current_y_p = particle_y_child[sparse_block_p * 32 + global_index_begin_p + local_th];
 
             if (current_y_p < ((y_block+1) * 32)/2 && current_y_p >= ((y_block) * 32)/2) {
                 if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
 
-                    if(current_y_p==(y_num_p-1)) {
+
+
+                    if (current_y_p == (y_num_p - 1)) {
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
-                                scale_factor_yxz*(parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
-                                parent_cache[2][current_y_p % 16]  + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16]);
+                                scale_factor_yxz *
+                                (parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
+                                 parent_cache[2][current_y_p % 16] + parent_cache[3][current_y_p % 16] +
+                                 parent_cache[4][current_y_p % 16] + parent_cache[5][current_y_p % 16] +
+                                 parent_cache[6][current_y_p % 16] + parent_cache[7][current_y_p % 16]);
 
 
-
-                    }else{
+                    } else {
                         particle_data_output[sparse_block_p * 32 + global_index_begin_p + local_th] =
-                                scale_factor_xz*(parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
-                                 parent_cache[2][current_y_p % 16]  + parent_cache[3][current_y_p%16]  + parent_cache[4][current_y_p%16] + parent_cache[5][current_y_p%16] + parent_cache[6][current_y_p%16] + parent_cache[7][current_y_p%16]);
+                                scale_factor_xz *
+                                (parent_cache[0][current_y_p % 16] + parent_cache[1][current_y_p % 16] +
+                                 parent_cache[2][current_y_p % 16] + parent_cache[3][current_y_p % 16] +
+                                 parent_cache[4][current_y_p % 16] + parent_cache[5][current_y_p % 16] +
+                                 parent_cache[6][current_y_p % 16] + parent_cache[7][current_y_p % 16]);
 
 
                     }
@@ -1145,6 +1153,10 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
         }
 
         __syncthreads();
+
+        parent_cache[2*block][local_th/2] = 0;
+        parent_cache[2*block+1][local_th/2] = 0;
+
 
     }
 
