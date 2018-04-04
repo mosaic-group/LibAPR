@@ -718,7 +718,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
     //__shared__ int y_cache[5][32];
 
     //keep these
-    __shared__ float parent_cache[8][16];
+    __shared__ float parent_cache[8][32];
 
     float current_val = 0;
 
@@ -938,7 +938,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
    // __shared__ float f_cache_t[4][32];
    // __shared__ int y_cache_t[4][32];
 
-    __shared__ float parent_cache[8][16];
+    __shared__ float parent_cache[8][32];
 
     //initialization to zero
 //    f_cache[block][local_th]=0;
