@@ -589,7 +589,7 @@ int main(int argc, char **argv) {
         } else {
 
             success = false;
-            if(aprIt.level() == aprIt.level_max()) {
+            if(aprIt.level() >= aprIt.level_max()) {
                 c_fail++;
                 if (output_c < 200) {
                     std::cout << "Expected: " << output[aprIt] << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
@@ -669,7 +669,6 @@ if (not_ghost) {\
 
 
 
-
 __global__ void shared_update_max(const std::size_t *row_info,
                               const std::uint16_t *particle_y,
                               const std::uint16_t *particle_data_input,
@@ -686,13 +685,13 @@ __global__ void shared_update_max(const std::size_t *row_info,
     *
     */
 
-    const int x_num = level_x_num[level];
+    //const int x_num = level_x_num[level];
     const int y_num = level_y_num[level];
-    const int z_num = level_z_num[level];
+    //const int z_num = level_z_num[level];
 
-    const int x_num_p = level_x_num[level-1];
-    const int y_num_p = level_y_num[level-1];
-    const int z_num_p = level_z_num[level-1];
+    //const int x_num_p = level_x_num[level-1];
+    //const int y_num_p = level_y_num[level-1];
+    //const int z_num_p = level_z_num[level-1];
 
     const unsigned int N = 4;
 
@@ -707,8 +706,8 @@ __global__ void shared_update_max(const std::size_t *row_info,
     }
 
 
-    int x_index = (8 * blockIdx.x + threadIdx.x - 1);
-    int z_index = (8 * blockIdx.z + threadIdx.z - 1);
+    //const int x_index = (8 * blockIdx.x + threadIdx.x - 1);
+    //const int z_index = (8 * blockIdx.z + threadIdx.z - 1);
 
 
     bool not_ghost=false;
@@ -718,7 +717,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     }
 
 
-    if((x_index >= x_num) || (x_index < 0)){
+    if(((8 * blockIdx.x + threadIdx.x - 1) >= level_x_num[level]) || ((8 * blockIdx.x + threadIdx.x - 1) < 0)){
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
@@ -727,7 +726,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         return; //out of bounds
     }
 
-    if((z_index >= z_num) || (z_index < 0)){
+    if(((8 * blockIdx.z + threadIdx.z - 1) >= level_z_num[level]) || ((8 * blockIdx.z + threadIdx.z - 1) < 0)){
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
         local_patch[threadIdx.z][threadIdx.x][1 ] = 0;
         local_patch[threadIdx.z][threadIdx.x][2 ] = 0;
@@ -735,11 +734,11 @@ __global__ void shared_update_max(const std::size_t *row_info,
         return; //out of bounds
     }
 
-    int x_index_p = (x_index)/2;
-    int z_index_p = (z_index)/2;
+    //int x_index_p = (x_index)/2;
+    //int z_index_p = (z_index)/2;
 
-    std::size_t current_row = level_offset[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
-    std::size_t current_row_p = level_offset[level-1] + (x_index_p) + (z_index_p)*x_num_p; // the input to each kernel is its chunk index for which it should iterate over
+    //std::size_t current_row = level_offset[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
+    //std::size_t current_row_p = level_offset[level-1] + (x_index_p) + (z_index_p)*x_num_p; // the input to each kernel is its chunk index for which it should iterate over
 
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
@@ -748,24 +747,24 @@ __global__ void shared_update_max(const std::size_t *row_info,
     std::size_t particle_global_index_end_p;
 
     // current level
-    get_row_begin_end(&particle_global_index_begin, &particle_global_index_end, current_row, row_info);
+    get_row_begin_end(&particle_global_index_begin, &particle_global_index_end, level_offset[level] + ((8 * blockIdx.x + threadIdx.x - 1)) + ((8 * blockIdx.z + threadIdx.z - 1))*level_x_num[level], row_info);
     // parent level, level - 1, one resolution lower (coarser)
-    get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, current_row_p, row_info);
+    get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, level_offset[level-1] + (((8 * blockIdx.x + threadIdx.x - 1))/2) + ( ((8 * blockIdx.z + threadIdx.z - 1))/2)*level_x_num[level-1], row_info);
 
-    std::size_t y_block = 1;
-    std::uint16_t y_update_flag[2] = {0};
-    std::size_t y_update_index[2] = {0};
+    //std::size_t y_block = 1;
+    std::uint8_t y_update_flag[2] = {0};
+    std::uint16_t y_update_index[2] = {0};
 
     //current level variables
-    std::size_t particle_index_l = particle_global_index_begin;
-    std::uint16_t y_l= particle_y[particle_index_l];
-    std::uint16_t f_l = particle_data_input[particle_index_l];
+    std::uint16_t particle_index_l = 0;
+    std::uint16_t y_l= particle_y[particle_global_index_begin];
+    std::uint16_t f_l = particle_data_input[particle_global_index_begin];
 
 
     //parent level variables
-    std::size_t particle_index_p = particle_global_index_begin_p;
-    std::uint16_t y_p= particle_y[particle_index_p];
-    std::uint16_t f_p = particle_data_input[particle_index_p];
+    std::uint16_t particle_index_p = 0;
+    std::uint16_t y_p= particle_y[particle_global_index_begin_p];
+    std::uint16_t f_p = particle_data_input[particle_global_index_begin_p];
 
 
     if(particle_global_index_begin_p == particle_global_index_end_p){
@@ -780,11 +779,10 @@ __global__ void shared_update_max(const std::size_t *row_info,
     //BOUNDARY CONDITIONS
     local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
 
-    const int filter_offset = 1;
 
     double neighbour_sum = 0;
 
-    for (int j = 0; j < (y_num); ++j) {
+    for (std::uint16_t j = 0; j < (y_num); ++j) {
 
         //Update steps for P->T
         __syncthreads();
@@ -807,27 +805,27 @@ __global__ void shared_update_max(const std::size_t *row_info,
         }
 
         //update at current level
-        if((y_l <= j) && ((particle_index_l+1) <particle_global_index_end)){
+        if((y_l <= j) && ((particle_global_index_begin + particle_index_l+1) <particle_global_index_end)){
             particle_index_l++;
-            y_l= particle_y[particle_index_l];
-            f_l = particle_data_input[particle_index_l];
+            y_l= particle_y[particle_global_index_begin + particle_index_l];
+            f_l = particle_data_input[particle_global_index_begin + particle_index_l];
         }
 
         //parent update loop
-        if((2*y_p <= j) && ((particle_index_p+1) <particle_global_index_end_p)){
+        if((2*y_p <= j) && ((particle_global_index_begin_p + particle_index_p+1) <particle_global_index_end_p)){
             particle_index_p++;
-            y_p= particle_y[particle_index_p];
-            f_p = particle_data_input[particle_index_p];
+            y_p= particle_y[particle_global_index_begin_p + particle_index_p];
+            f_p = particle_data_input[particle_global_index_begin_p + particle_index_p];
         }
 
         __syncthreads();
         //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
 
-        if(y_update_flag[(j-filter_offset+2)%2]==1){
+        if(y_update_flag[(j-1+2)%2]==1){
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
                 //particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
 
-            LOCALPATCHCONV(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
+            LOCALPATCHCONV(particle_data_output,particle_global_index_begin + y_update_index[(j+2-1)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
 
         }
 
@@ -840,7 +838,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
 
-        LOCALPATCHCONV(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
+        LOCALPATCHCONV(particle_data_output,particle_global_index_begin + particle_index_l,threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
         //LOCALPATCHUPDATE(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,(y_num-1) % N);
 
     }
