@@ -506,7 +506,7 @@ int main(int argc, char **argv) {
                 c_fail++;
                 success = false;
 
-                if (output_c < 1000) {
+                if (output_c < 5) {
                     std::cout << "Expected: " << aprIt.y() << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
                               << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
                     output_c++;
@@ -614,116 +614,116 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     local_patch[block][local_th]=0;
 
-    std::size_t global_index_begin_0;
-    std::size_t global_index_end_0;
+    std::size_t global_index_begin_0[4];
+    std::size_t global_index_end_0[4];
 
-    std::size_t global_index_begin_p;
-    std::size_t global_index_end_p;
+    std::size_t global_index_begin_p[4];
+    std::size_t global_index_end_p[4];
 
 
     //keep these
 
-    float current_val = 0;
-    float current_val_p = 0;
+    float current_val[4] = {0};
+    float current_val_p[4] = {0};
 
 
-    int current_y=-1;
-    int current_y_p=-1;
+    int current_y[4]={-1};
+    int current_y_p[4]={-1};
+
     //ying printf("hello begin %d end %d chunks %d number parts %d \n",(int) global_index_begin_0,(int) global_index_end_f, (int) number_chunk, (int) number_parts);
 
+    for (int i = 0; i < 4; ++i) {
 
-    if((x_index >= level_x_num[level]) || (z_index >= level_z_num[level]) ){
 
-        global_index_begin_0 = 1;
-        global_index_end_0 = 0;
+        if ((x_index >= level_x_num[level]) || (z_index >= level_z_num[level])) {
 
-        // return; //out of bounds
-    } else {
-        get_row_begin_end(&global_index_begin_0, &global_index_end_0, x_index + z_index*level_x_num[level] + level_offset[level], row_info);
+            global_index_begin_0[i] = 1;
+            global_index_end_0[i] = 0;
 
+            // return; //out of bounds
+        } else {
+            get_row_begin_end(&global_index_begin_0[i], &global_index_end_0[i],
+                              x_index + z_index * level_x_num[level] + level_offset[level], row_info);
+
+
+        }
+
+        get_row_begin_end(&global_index_begin_p[i], &global_index_end_p[i],
+                          blockIdx.x + blockIdx.z * level_x_num[level - 1] + level_offset[level - 1], row_info);
+
+
+
+
+
+        //initialize (i=0)
+        if ((global_index_begin_0[i] + local_th) < global_index_end_0[i]) {
+            current_val[i] = particle_data_input[global_index_begin_0[i] + local_th];
+
+            current_y[i] = particle_y[global_index_begin_0[i] + local_th];
+
+            local_patch[block][current_y[i] % 32] = current_y[i];
+        }
+
+
+        if ((global_index_begin_p[i] + local_th) < global_index_end_p[i]) {
+
+            current_y_p[i] = particle_y[global_index_begin_p[i] + local_th];
+            current_val_p[i] = particle_data_input[global_index_begin_p[i] + local_th];
+
+        }
 
     }
-
-    get_row_begin_end(&global_index_begin_p, &global_index_end_p, blockIdx.x + blockIdx.z*level_x_num[level-1] + level_offset[level-1], row_info);
-
-
-
-    const std::uint16_t number_y_chunk = (level_y_num[level]+31)/32;
-
-
-    //initialize (i=0)
-    if ((global_index_begin_0 + local_th) < global_index_end_0) {
-        current_val = particle_data_input[global_index_begin_0 + local_th];
-
-        current_y =  particle_y[ global_index_begin_0 + local_th];
-
-        local_patch[block][current_y%32] = current_y;
-    }
-
-
-
-
-    if (( global_index_begin_p + local_th) < global_index_end_p) {
-
-        current_y_p = particle_y[ global_index_begin_p + local_th];
-        current_val_p = particle_data_input[ global_index_begin_p + local_th];
-
-    }
-
-
 
     uint16_t sparse_block = 0;
     int sparse_block_p =0;
 
+    const std::uint16_t number_y_chunk = (level_y_num[level] + 31) / 32;
+
     for (int y_block = 0; y_block < number_y_chunk; ++y_block) {
 
-        __syncthreads();
-        //value less then current chunk then update.
-        if (current_y < y_block * 32) {
-            sparse_block++;
-            if ((sparse_block * 32 + global_index_begin_0 + local_th) < global_index_end_0) {
-                current_val = particle_data_input[sparse_block * 32 + global_index_begin_0 +
-                                                  local_th];
+        for (int i = 0; i < 4; ++i) {
 
-                current_y = particle_y[sparse_block * 32 + global_index_begin_0 + local_th];
+            __syncthreads();
+            //value less then current chunk then update.
+            if (current_y[i] < y_block * 32) {
+                sparse_block++;
+                if ((sparse_block * 32 + global_index_begin_0[i] + local_th) < global_index_end_0[i]) {
+                    current_val[i] = particle_data_input[sparse_block * 32 + global_index_begin_0[i] +
+                                                         local_th];
 
+                    current_y[i] = particle_y[sparse_block * 32 + global_index_begin_0[i] + local_th];
 
-
-            }
-
-        }
-
-
-        __syncthreads();
-        //fetch the parent particle data
-
-        if (current_y_p < ((y_block * 32)/2)) {
-            sparse_block_p++;
-
-
-            if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
-
-                current_y_p = particle_y[sparse_block_p * 32 + global_index_begin_p + local_th];
-                current_val_p = particle_data_input[sparse_block_p * 32 + global_index_begin_p + local_th];
-            }
-
-        }
-
-        __syncthreads();
-        if ((current_y < (y_block + 1) * 32) && (current_y >= (y_block) * 32)) {
-
-            local_patch[block][current_y%32] = current_y;
-
-            if ((sparse_block * 32 + global_index_begin_0 + local_th) < global_index_end_0) {
-                particle_data_output[sparse_block * 32 + global_index_begin_0 +
-                                                  local_th] = local_patch[block][current_y%32];
-
-
+                }
 
             }
 
-        }
 
+            __syncthreads();
+            //fetch the parent particle data
+
+            if (current_y_p[i] < ((y_block * 32) / 2)) {
+                sparse_block_p++;
+
+                if ((sparse_block_p * 32 + global_index_begin_p + local_th) < global_index_end_p) {
+                    current_y_p[i] = particle_y[sparse_block_p * 32 + global_index_begin_p[i] + local_th];
+                    current_val_p[i] = particle_data_input[sparse_block_p * 32 + global_index_begin_p[i] + local_th];
+                }
+
+            }
+
+            __syncthreads();
+            if ((current_y[i] < (y_block + 1) * 32) && (current_y[i] >= (y_block) * 32)) {
+
+                local_patch[block][current_y[i] % 32] = current_y[i];
+
+                if ((sparse_block * 32 + global_index_begin_0[i] + local_th) < global_index_end_0[i]) {
+                    particle_data_output[sparse_block * 32 + global_index_begin_0[i] +
+                                         local_th] = local_patch[block][current_y[i] % 32];
+
+                }
+            }
+
+        }
 
     }
 
