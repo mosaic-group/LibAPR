@@ -164,7 +164,7 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> neighbour_iterator(apr);
     APRIterator<uint16_t> apr_iterator(apr);
 
-    int num_rep = 100;
+    int num_rep = options.num_rep;
 
     timer.start_timer("APR serial iterator neighbours loop");
 
