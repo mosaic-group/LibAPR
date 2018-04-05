@@ -783,7 +783,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     const int filter_offset = 1;
 
     __shared__ std::uint16_t y_update_flag[10][10][2];
-    __shared__ std::size_t y_update_index[10][10][2];
+    __shared__ std::size_t y_update_index[10][10][3];
 
     y_update_flag[threadIdx.z][threadIdx.x][0] = 0;
     y_update_flag[threadIdx.z][threadIdx.x][1] = 0;
