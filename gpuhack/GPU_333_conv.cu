@@ -687,14 +687,14 @@ __global__ void shared_update_max(const std::size_t *row_info,
     */
 
     const int x_num = level_x_num[level];
-    const int y_num = level_y_num[level];
+
     const int z_num = level_z_num[level];
 
     const int x_num_p = level_x_num[level-1];
     const int y_num_p = level_y_num[level-1];
     const int z_num_p = level_z_num[level-1];
 
-    const unsigned int N = 4;
+
 
     __shared__ std::uint16_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
@@ -707,9 +707,6 @@ __global__ void shared_update_max(const std::size_t *row_info,
     }
 
 
-    int x_index = (8 * blockIdx.x + threadIdx.x - 1);
-    int z_index = (8 * blockIdx.z + threadIdx.z - 1);
-
 
     bool not_ghost=false;
 
@@ -717,6 +714,8 @@ __global__ void shared_update_max(const std::size_t *row_info,
         not_ghost = true;
     }
 
+    int x_index = (8 * blockIdx.x + threadIdx.x - 1);
+    int z_index = (8 * blockIdx.z + threadIdx.z - 1);
 
     if((x_index >= x_num) || (x_index < 0)){
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
@@ -735,11 +734,6 @@ __global__ void shared_update_max(const std::size_t *row_info,
         return; //out of bounds
     }
 
-    int x_index_p = (x_index)/2;
-    int z_index_p = (z_index)/2;
-
-    std::size_t current_row = level_offset[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
-    std::size_t current_row_p = level_offset[level-1] + (x_index_p) + (z_index_p)*x_num_p; // the input to each kernel is its chunk index for which it should iterate over
 
     std::size_t particle_global_index_begin;
     std::size_t particle_global_index_end;
@@ -748,19 +742,17 @@ __global__ void shared_update_max(const std::size_t *row_info,
     std::size_t particle_global_index_end_p;
 
     // current level
+    std::size_t current_row = level_offset[level] + (x_index) + (z_index)*x_num; // the input to each kernel is its chunk index for which it should iterate over
     get_row_begin_end(&particle_global_index_begin, &particle_global_index_end, current_row, row_info);
-    // parent level, level - 1, one resolution lower (coarser)
-    get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, current_row_p, row_info);
-
-    std::size_t y_block = 1;
-    std::uint16_t y_update_flag[2] = {0};
-    std::size_t y_update_index[2] = {0};
-
-    //current level variables
     std::size_t particle_index_l = particle_global_index_begin;
     std::uint16_t y_l= particle_y[particle_index_l];
     std::uint16_t f_l = particle_data_input[particle_index_l];
 
+    int x_index_p = (x_index)/2;
+    int z_index_p = (z_index)/2;
+    std::size_t current_row_p = level_offset[level-1] + (x_index_p) + (z_index_p)*x_num_p; // the input to each kernel is its chunk index for which it should iterate over
+    // parent level, level - 1, one resolution lower (coarser)
+    get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, current_row_p, row_info);
 
     //parent level variables
     std::size_t particle_index_p = particle_global_index_begin_p;
@@ -768,6 +760,11 @@ __global__ void shared_update_max(const std::size_t *row_info,
     std::uint16_t f_p = particle_data_input[particle_index_p];
 
 
+
+    //current level variables
+
+
+    const int y_num = level_y_num[level];
     if(particle_global_index_begin_p == particle_global_index_end_p){
         y_p = y_num+1;//no particles don't do anything
     }
@@ -776,11 +773,14 @@ __global__ void shared_update_max(const std::size_t *row_info,
         y_l = y_num+1;//no particles don't do anything
     }
 
-
+    const unsigned int N = 4;
     //BOUNDARY CONDITIONS
     local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
 
     const int filter_offset = 1;
+
+    std::uint16_t y_update_flag[2] = {0};
+    std::size_t y_update_index[2] = {0};
 
     double neighbour_sum = 0;
 
