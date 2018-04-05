@@ -129,9 +129,6 @@ float pixels_linear_neighbour_access_serial(uint64_t y_num,uint64_t x_num,uint64
     int k = 0;
     int i = 0;
 
-    int j_n = 0;
-    int k_n = 0;
-    int i_n = 0;
 
     //float neigh_sum = 0;
     float norm = pow(stencil_half*2+1,3);

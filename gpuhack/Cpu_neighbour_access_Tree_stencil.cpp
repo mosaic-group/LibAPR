@@ -34,6 +34,8 @@ struct cmdLineOptions{
     std::string stats = "";
     std::string directory = "";
     std::string input = "";
+    int num_rep = 10;
+    int stencil_size = 1;
 };
 
 cmdLineOptions read_command_line_options(int argc, char **argv);
@@ -42,7 +44,7 @@ bool command_option_exists(char **begin, char **end, const std::string &option);
 
 char* get_command_option(char **begin, char **end, const std::string &option);
 
-void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<float>& part_tree,std::vector<double>& stencil, const int stencil_size, const int stencil_half);
+void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<float>& part_tree,std::vector<float>& stencil, const int stencil_size, const int stencil_half);
 
 template<typename T,typename ParticleDataType>
 void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator, APRIterator<uint16_t>& treeIterator, ExtraParticleData<float> &tree_data,MeshData<T>& temp_vec,ExtraParticleData<ParticleDataType>& particleData, const int stencil_size, const int stencil_half) {
@@ -112,7 +114,12 @@ void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr
 
     /******** start of using the tree iterator for downsampling ************/
 
+
+// #TODO OpenMP?
     if (level < apr_iterator.level_max()) {
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(x) firstprivate(treeIterator)
+#endif
         for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
             for (treeIterator.set_new_lzx(level, z , x );
                  treeIterator.global_index() < treeIterator.particles_zx_end(level, z ,
@@ -246,10 +253,10 @@ int main(int argc, char **argv) {
     ExtraParticleData<float> part_sum(apr);
 
 
-    const int stencil_half = 2;
+    const int stencil_half = options.stencil_size;
     const int stencil_size = 2*stencil_half + 1;
 
-    std::vector<double>  stencil;
+    std::vector<float>  stencil;
     float stencil_value = 1.0f/(1.0f*pow(stencil_half*2 + 1,stencil_size));
 
     stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
@@ -259,6 +266,48 @@ int main(int argc, char **argv) {
     timer.start_timer("Dense neighbour access");
 
     for (int j = 0; j < num_rep; ++j) {
+
+        //do the APR tree step
+        std::fill(child_counter.data.begin(), child_counter.data.end(), 0);
+        std::fill(tree_data.data.begin(), tree_data.data.end(), 0);
+
+
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(static) private(particle_number) firstprivate(apr_iterator, parentIterator)
+#endif
+        for (particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+            //This step is required for all loops to set the iterator by the particle number
+            apr_iterator.set_iterator_to_particle_by_number(particle_number);
+            //set parent
+            parentIterator.set_iterator_to_parent(apr_iterator);
+
+            tree_data[parentIterator] = apr.particles_intensities[apr_iterator] + tree_data[parentIterator];
+            child_counter[parentIterator]++;
+        }
+
+        //then do the rest of the tree where order matters
+        for (unsigned int level = treeIterator.level_max(); level >= treeIterator.level_min(); --level) {
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
+#endif
+            for (parent_number = treeIterator.particles_level_begin(level);
+                 parent_number < treeIterator.particles_level_end(level); ++parent_number) {
+                treeIterator.set_iterator_to_particle_by_number(parent_number);
+                tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
+            }
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
+#endif
+            for (parent_number = treeIterator.particles_level_begin(level);
+                 parent_number < treeIterator.particles_level_end(level); ++parent_number) {
+
+                treeIterator.set_iterator_to_particle_by_number(parent_number);
+                if (parentIterator.set_iterator_to_parent(treeIterator)) {
+                    tree_data[parentIterator] = tree_data[treeIterator] + tree_data[parentIterator];
+                    child_counter[parentIterator]++;
+                }
+            }
+        }
 
         for (int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
 
@@ -350,7 +399,7 @@ int main(int argc, char **argv) {
 
     std::cout << 1000*time/(num_rep*(1.0f)) << " ms  CONV" << std::endl;
     std::cout << 1000000.0*1000*time/(num_rep*(1.0f)*apr.total_number_particles()) << " ms  million particles CONV" << std::endl;
-    std::cout << 1000*ds_time/(num_rep*(1.0f)) << " ms DS Tree" << std::endl;
+    std::cout << 1000000.0*1000*ds_time/(num_rep*(1.0f)*apr.total_number_particles())  << " ms million DS Tree" << std::endl;
     //check the result
 
     bool success = true;
@@ -379,7 +428,7 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         apr_iterator.set_iterator_to_particle_by_number(particle_number);
 
-        if(round(part_sum_dense.data[particle_number]) != round(utest_particles.data[particle_number])){
+        if(abs(part_sum_dense.data[particle_number]-utest_particles.data[particle_number])>1){
 
             float dense = part_sum_dense.data[particle_number];
 
@@ -405,7 +454,7 @@ int main(int argc, char **argv) {
 }
 
 
-void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<float>& part_tree,std::vector<double>& stencil, const int stencil_size, const int stencil_half){
+void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<float>& part_tree,std::vector<float>& stencil, const int stencil_size, const int stencil_half){
 
     for (uint64_t level_local = apr_iterator.level_max(); level_local >= apr_iterator.level_min(); --level_local) {
 
@@ -504,7 +553,7 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
                 for (apr_iterator.set_new_lzx(level, z, x);
                      apr_iterator.global_index() < apr_iterator.particles_zx_end(level, z,
                                                                                  x); apr_iterator.set_iterator_to_particle_next_particle()) {
-                    double neigh_sum = 0;
+                    float neigh_sum = 0;
                     float counter = 0;
 
                     const int k = apr_iterator.y(); // offset to allow for boundary padding
@@ -528,7 +577,7 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
                         }
                     }
 
-                    test_particles[apr_iterator] = std::round(neigh_sum/(1.0f*pow(stencil_size,3)));
+                    test_particles[apr_iterator] = std::roundf(neigh_sum/(1.0f*pow(stencil_size,3)));
 
                 }
             }
@@ -537,8 +586,8 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
 
 
 
-        std::string image_file_name = apr.parameters.input_dir + std::to_string(level_local) + "_by_level.tif";
-        TiffUtils::saveMeshAsTiff(image_file_name, by_level_recon);
+//        std::string image_file_name = apr.parameters.input_dir + std::to_string(level_local) + "_by_level.tif";
+//        TiffUtils::saveMeshAsTiff(image_file_name, by_level_recon);
 
     }
 
@@ -587,6 +636,16 @@ cmdLineOptions read_command_line_options(int argc, char **argv){
     if(command_option_exists(argv, argv + argc, "-o"))
     {
         result.output = std::string(get_command_option(argv, argv + argc, "-o"));
+    }
+
+    if(command_option_exists(argv, argv + argc, "-numrep"))
+    {
+        result.num_rep = std::stoi(std::string(get_command_option(argv, argv + argc, "-numrep")));
+    }
+
+    if(command_option_exists(argv, argv + argc, "-stencil_size"))
+    {
+        result.stencil_size = std::stoi(std::string(get_command_option(argv, argv + argc, "-stencil_size")));
     }
 
     return result;
