@@ -664,7 +664,7 @@ if (not_ghost) {\
                  + local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]\
                  + local_patch[z + q - 1][x + 2 - 1][(y+N+1)%N];\
     }\
-    particle_output[index] = std::round(neighbour_sum / 27.0f);\
+    particle_output[index] = std::roundf(neighbour_sum / 27.0f);\
 }\
 
 
@@ -791,7 +791,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     //std::uint16_t y_update_flag[2] = {0};
     //std::size_t y_update_index[2] = {0};
 
-    double neighbour_sum = 0;
+
 
     for (int j = 0; j < (y_num); ++j) {
 
@@ -835,7 +835,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         if(y_update_flag[threadIdx.z][threadIdx.x][(j-filter_offset+2)%2]==1){
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
                 //particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
-
+            float neighbour_sum = 0;
             LOCALPATCHCONV(particle_data_output,y_update_index[threadIdx.z][threadIdx.x][(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
 
         }
@@ -848,7 +848,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     __syncthreads();
 
     if(y_update_flag[threadIdx.z][threadIdx.x][(y_num-1)%2]==1){ //the last particle (if it exists)
-
+        float neighbour_sum = 0;
         LOCALPATCHCONV(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
         //LOCALPATCHUPDATE(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,(y_num-1) % N);
 
