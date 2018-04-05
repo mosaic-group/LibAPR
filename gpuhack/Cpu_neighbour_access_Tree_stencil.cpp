@@ -261,6 +261,8 @@ int main(int argc, char **argv) {
 
     stencil.resize(pow(stencil_half*2 + 1,stencil_size),stencil_value);
 
+    float norm = pow(stencil_size,3);
+
     ExtraParticleData<float> part_sum_dense(apr);
 
     timer.start_timer("Dense neighbour access");
@@ -366,7 +368,7 @@ int main(int argc, char **argv) {
                     for (apr_iterator.set_new_lzx(level, z, x);
                          apr_iterator.global_index() < apr_iterator.particles_zx_end(level, z,
                                                                                      x); apr_iterator.set_iterator_to_particle_next_particle()) {
-                        double neigh_sum = 0;
+                        float neigh_sum = 0;
                         int counter = 0;
 
                         const int k = apr_iterator.y() + stencil_half; // offset to allow for boundary padding
@@ -382,7 +384,7 @@ int main(int argc, char **argv) {
                             }
                         }
 
-                        part_sum_dense[apr_iterator] = std::round(neigh_sum/(pow(stencil_size,3)*1.0f));
+                        part_sum_dense[apr_iterator] = std::roundf(neigh_sum/(norm*1.0f));
 
                     }//y, pixels/columns
                 }//x , rows
