@@ -782,8 +782,14 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     const int filter_offset = 1;
 
-    std::uint16_t y_update_flag[2] = {0};
-    std::size_t y_update_index[2] = {0};
+    __shared__ std::uint16_t y_update_flag[10][10][2];
+    __shared__ std::size_t y_update_index[10][10][2];
+
+    y_update_flag[threadIdx.z][threadIdx.x][0] = 0;
+    y_update_flag[threadIdx.z][threadIdx.x][1] = 0;
+
+    //std::uint16_t y_update_flag[2] = {0};
+    //std::size_t y_update_index[2] = {0};
 
     double neighbour_sum = 0;
 
@@ -803,10 +809,10 @@ __global__ void shared_update_max(const std::size_t *row_info,
         //Check if its time to update current level
         if(j==y_l) {
             local_patch[threadIdx.z][threadIdx.x][j % N ] =  f_l; //initial update
-            y_update_flag[j%2]=1;
-            y_update_index[j%2] = particle_index_l;
+            y_update_flag[threadIdx.z][threadIdx.x][j%2]=1;
+            y_update_index[threadIdx.z][threadIdx.x][j%2] = particle_index_l;
         } else {
-            y_update_flag[j%2]=0;
+            y_update_flag[threadIdx.z][threadIdx.x][j%2]=0;
         }
 
         //update at current level
@@ -826,11 +832,11 @@ __global__ void shared_update_max(const std::size_t *row_info,
         __syncthreads();
         //COMPUTE THE T->P from shared memory, this is lagged by the size of the filter
 
-        if(y_update_flag[(j-filter_offset+2)%2]==1){
+        if(y_update_flag[threadIdx.z][threadIdx.x][(j-filter_offset+2)%2]==1){
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
                 //particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
 
-            LOCALPATCHCONV(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
+            LOCALPATCHCONV(particle_data_output,y_update_index[threadIdx.z][threadIdx.x][(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
 
         }
 
@@ -841,7 +847,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     local_patch[threadIdx.z][threadIdx.x][(y_num) % N ]=0;
     __syncthreads();
 
-    if(y_update_flag[(y_num-1)%2]==1){ //the last particle (if it exists)
+    if(y_update_flag[threadIdx.z][threadIdx.x][(y_num-1)%2]==1){ //the last particle (if it exists)
 
         LOCALPATCHCONV(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
         //LOCALPATCHUPDATE(particle_data_output,particle_index_l,threadIdx.z,threadIdx.x,(y_num-1) % N);
