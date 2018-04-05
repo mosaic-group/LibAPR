@@ -77,7 +77,7 @@ float pixels_linear_neighbour_access_openmp(uint64_t y_num,uint64_t x_num,uint64
         for(j = 0; j < (z_num);j++){
             for(i = 0; i < (x_num);i++){
                 for(k = 0;k < (y_num);k++){
-                    double neigh_sum = 0;
+                    float neigh_sum = 0;
 
                     int min_j = std::max(0,j-stencil_half);
                     int min_i = std::max(0,i-stencil_half);
@@ -95,7 +95,7 @@ float pixels_linear_neighbour_access_openmp(uint64_t y_num,uint64_t x_num,uint64
                         }
                     }
 
-                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::round(neigh_sum/norm);
+                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::roundf(neigh_sum/norm);
 
                 }
             }
@@ -141,7 +141,7 @@ float pixels_linear_neighbour_access_serial(uint64_t y_num,uint64_t x_num,uint64
         for(j = 0; j < (z_num);j++){
             for(i = 0; i < (x_num);i++){
                 for(k = 0;k < (y_num);k++){
-                    double neigh_sum = 0;
+                    float neigh_sum = 0;
 
                     int min_j = std::max(0,j-stencil_half);
                     int min_i = std::max(0,i-stencil_half);
@@ -159,7 +159,7 @@ float pixels_linear_neighbour_access_serial(uint64_t y_num,uint64_t x_num,uint64
                         }
                     }
 
-                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::round(neigh_sum/norm);
+                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::roundf(neigh_sum/norm);
 
                 }
             }
@@ -208,6 +208,7 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> apr_iterator(apr);
 
     unsigned int number_repeats = options.num_rep;
+    unsigned int number_repeats_s = std::max((number_repeats/10),(unsigned int)5);
     pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
 
     float time_pixels333 = pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
@@ -220,15 +221,15 @@ int main(int argc, char **argv) {
     std::cout << "Pixel filter 555 (OpenMP) took: " << time_pixels555*1000 << " ms" << std::endl;
     std::cout << "Pixel filter 555 (OpenMP) per-million pixels: " << 1000*(time_pixels555*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
 
-//    float time_pixels333s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
-//
-//    std::cout << "Pixel filter 333 (serial) took: " << time_pixels333s*1000 << " ms" << std::endl;
-//    std::cout << "Pixel filter 333 (serial) per-million pixels: " << 1000*(time_pixels333s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
-//
-//    float time_pixels555s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,2);
-//
-//    std::cout << "Pixel filter 555 (serial) took: " << time_pixels555s*1000 << " ms" << std::endl;
-//    std::cout << "Pixel filter 555 (serial) per-million pixels: " << 1000*(time_pixels555s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
+    float time_pixels333s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats_s,1);
+
+    std::cout << "Pixel filter 333 (serial) took: " << time_pixels333s*1000 << " ms" << std::endl;
+    std::cout << "Pixel filter 333 (serial) per-million pixels: " << 1000*(time_pixels333s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
+
+    float time_pixels555s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats_s,2);
+
+    std::cout << "Pixel filter 555 (serial) took: " << time_pixels555s*1000 << " ms" << std::endl;
+    std::cout << "Pixel filter 555 (serial) per-million pixels: " << 1000*(time_pixels555s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
 
 }
 
