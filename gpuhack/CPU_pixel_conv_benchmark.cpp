@@ -34,6 +34,7 @@ struct cmdLineOptions{
     std::string stats = "";
     std::string directory = "";
     std::string input = "";
+    int num_rep = 0;
 };
 
 cmdLineOptions read_command_line_options(int argc, char **argv);
@@ -206,7 +207,7 @@ int main(int argc, char **argv) {
     APRIterator<uint16_t> neighbour_iterator(apr);
     APRIterator<uint16_t> apr_iterator(apr);
 
-    unsigned int number_repeats = 50;
+    unsigned int number_repeats = options.num_rep;
     pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
 
     float time_pixels333 = pixels_linear_neighbour_access_openmp<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
@@ -273,6 +274,12 @@ cmdLineOptions read_command_line_options(int argc, char **argv){
     if(command_option_exists(argv, argv + argc, "-o"))
     {
         result.output = std::string(get_command_option(argv, argv + argc, "-o"));
+    }
+
+
+    if(command_option_exists(argv, argv + argc, "-numrep"))
+    {
+        result.num_rep = std::stoi(std::string(get_command_option(argv, argv + argc, "-numrep")));
     }
 
     return result;
