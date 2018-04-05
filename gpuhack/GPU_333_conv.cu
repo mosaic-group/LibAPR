@@ -696,7 +696,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
 
 
-    __shared__ std::uint16_t local_patch[10][10][4]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+     // This is block wise shared memory this is assuming an 8*8 block with pad()
 
 
     if(threadIdx.x >= 10){
@@ -716,6 +716,9 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     int x_index = (8 * blockIdx.x + threadIdx.x - 1);
     int z_index = (8 * blockIdx.z + threadIdx.z - 1);
+
+
+    __shared__ std::uint16_t local_patch[10][10][4];
 
     if((x_index >= x_num) || (x_index < 0)){
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
