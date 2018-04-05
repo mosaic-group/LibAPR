@@ -783,7 +783,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     const int filter_offset = 1;
 
     __shared__ std::uint16_t y_update_flag[10][10][2];
-    __shared__ std::size_t y_update_index[10][10][3];
+    __shared__ std::uint16_t y_update_index[10][10][2];
 
     y_update_flag[threadIdx.z][threadIdx.x][0] = 0;
     y_update_flag[threadIdx.z][threadIdx.x][1] = 0;
@@ -810,7 +810,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         if(j==y_l) {
             local_patch[threadIdx.z][threadIdx.x][j % N ] =  f_l; //initial update
             y_update_flag[threadIdx.z][threadIdx.x][j%2]=1;
-            y_update_index[threadIdx.z][threadIdx.x][j%2] = particle_index_l;
+            y_update_index[threadIdx.z][threadIdx.x][j%2] = particle_index_l - particle_global_index_begin;
         } else {
             y_update_flag[threadIdx.z][threadIdx.x][j%2]=0;
         }
@@ -836,7 +836,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
                 //particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
             float neighbour_sum = 0;
-            LOCALPATCHCONV(particle_data_output,y_update_index[threadIdx.z][threadIdx.x][(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
+            LOCALPATCHCONV(particle_data_output,particle_global_index_begin + y_update_index[threadIdx.z][threadIdx.x][(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
 
         }
 
