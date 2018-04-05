@@ -841,10 +841,8 @@ __global__ void shared_update_interior_level(const std::size_t *row_info,
     const unsigned int N = 6;
 
 
-    __shared__ std::float_t local_patch[12][12][6]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::uint16_t local_patch[12][12][6]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
-    uint16_t y_cache[N]={0}; // These are local register/private caches
-    uint16_t index_cache[N]={0}; // These are local register/private caches
 
     if(threadIdx.x >= 12){
         return;
@@ -1078,10 +1076,8 @@ __global__ void shared_update_min(const std::size_t *row_info,
 
     const unsigned int N = 6;
 
-    __shared__ std::float_t local_patch[12][12][6]; // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::uint16_t local_patch[12][12][6]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
-    uint16_t y_cache[N]={0}; // These are local register/private caches
-    uint16_t index_cache[N]={0}; // These are local register/private caches
 
     if(threadIdx.x >= 12){
         return;
