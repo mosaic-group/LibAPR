@@ -717,8 +717,8 @@ __global__ void shared_update_max(const std::size_t *row_info,
     int x_index = (8 * blockIdx.x + threadIdx.x - 1);
     int z_index = (8 * blockIdx.z + threadIdx.z - 1);
 
-
-    __shared__ std::uint16_t local_patch[10][10][4];
+    const unsigned int N = 4;
+    __shared__ std::uint16_t local_patch[10][10][6];
 
     if((x_index >= x_num) || (x_index < 0)){
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
@@ -776,7 +776,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         y_l = y_num+1;//no particles don't do anything
     }
 
-    const unsigned int N = 4;
+
     //BOUNDARY CONDITIONS
     local_patch[threadIdx.z][threadIdx.x][(N-1) % N ] = 0; //this is at (y-1)
 
@@ -836,7 +836,26 @@ __global__ void shared_update_max(const std::size_t *row_info,
             //LOCALPATCHUPDATE(particle_data_output,y_update_index[(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,(j+N-filter_offset) % N);
                 //particle_data_output[y_update_index[(j+2-filter_offset)%2]] = local_patch[threadIdx.z][threadIdx.x][(j+N-filter_offset) % N];
             float neighbour_sum = 0;
-            LOCALPATCHCONV(particle_data_output,particle_global_index_begin + y_update_index[threadIdx.z][threadIdx.x][(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
+           // LOCALPATCHCONV(particle_data_output,particle_global_index_begin + y_update_index[threadIdx.z][threadIdx.x][(j+2-filter_offset)%2],threadIdx.z,threadIdx.x,j-1,neighbour_sum);
+
+            const uint16_t y =j-1;
+            const uint16_t x = threadIdx.x;
+            const uint16_t z = threadIdx.z;
+
+            if (not_ghost) {
+                for (int q = 0; q < 3; ++q) {
+                    neighbour_sum += local_patch[z + q - 1][x + 0 - 1][(y+N)%N]
+                             + local_patch[z + q - 1][x + 0 - 1][(y+N-1)%N]
+                             + local_patch[z + q - 1][x + 0 - 1][(y+N+1)%N]
+                             + local_patch[z + q - 1][x + 1 - 1][(y+N)%N]
+                             + local_patch[z + q - 1][x + 1 - 1][(y+N-1)%N]
+                             + local_patch[z + q - 1][x + 1 - 1][(y+N+1)%N]
+                             + local_patch[z + q - 1][x + 2 - 1][(y+N)%N]
+                             + local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]
+                             + local_patch[z + q - 1][x + 2 - 1][(y+N+1)%N];
+                }
+                particle_data_output[ particle_global_index_begin + y_update_index[threadIdx.z][threadIdx.x][(j+2-filter_offset)%2]] = std::roundf(neighbour_sum / 27.0f);
+            }
 
         }
 
