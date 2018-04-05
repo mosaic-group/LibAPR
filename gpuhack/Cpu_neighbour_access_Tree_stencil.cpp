@@ -118,7 +118,7 @@ void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr
 // #TODO OpenMP?
     if (level < apr_iterator.level_max()) {
 #ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(x) firstprivate(treeIterator)
+//#pragma omp parallel for schedule(dynamic) private(x) firstprivate(treeIterator)
 #endif
         for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
             for (treeIterator.set_new_lzx(level, z , x );
