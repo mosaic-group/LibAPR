@@ -647,7 +647,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     const unsigned int N = 6;
 
-    // This is block wise shared memory this is assuming an 8*8 block with pad()
+    __shared__ std::uint16_t local_patch[12][12][6]; // This is block wise shared memory this is assuming an 8*8 block with pad()
 
 
     if(threadIdx.x >= 12){
@@ -667,7 +667,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     if((threadIdx.x > 1) && (threadIdx.x < 10) && (threadIdx.z > 1) && (threadIdx.z < 10)){
         not_ghost = true;
     }
-    __shared__ std::uint16_t local_patch[12][12][6];
+
 
     if((x_index >= x_num) || (x_index < 0)){
         local_patch[threadIdx.z][threadIdx.x][0] = 0; //this is at (y-1)
@@ -707,8 +707,9 @@ __global__ void shared_update_max(const std::size_t *row_info,
     // parent level, level - 1, one resolution lower (coarser)
     get_row_begin_end(&particle_global_index_begin_p, &particle_global_index_end_p, current_row_p, row_info);
 
+    std::size_t y_block = 1;
     //std::uint16_t y_update_flag[3] = {0};
-    //std::size_t y_update_index[3] = {0};
+    std::size_t y_update_index[3] = {0};
 
     __shared__ std::uint16_t y_update_flag[12][12][3];
     y_update_flag[threadIdx.z][threadIdx.x][0] = 0;
@@ -716,7 +717,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
     y_update_flag[threadIdx.z][threadIdx.x][2] = 0;
 
 
-    __shared__ std::uint16_t y_update_index[12][12][3];
+
 
     //current level variables
     std::size_t particle_index_l = particle_global_index_begin;
@@ -765,7 +766,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
         if(j==y_l) {
             local_patch[threadIdx.z][threadIdx.x][j % N ] =  f_l; //initial update
             y_update_flag[threadIdx.z][threadIdx.x][j%3]=1;
-            y_update_index[threadIdx.z][threadIdx.x][j%3] = particle_index_l-particle_global_index_begin;
+            y_update_index[j%3] = particle_index_l;
         } else {
             y_update_flag[threadIdx.z][threadIdx.x][j%3]=0;
         }
@@ -789,7 +790,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
         if(y_update_flag[threadIdx.z][threadIdx.x][(j-filter_offset+3)%3]==1) {
             float neighbour_sum = 0;
-            LOCALPATCHCONV(particle_data_output,particle_global_index_begin+y_update_index[threadIdx.z][threadIdx.x][(j+3-filter_offset)%3],threadIdx.z,threadIdx.x,j-2,neighbour_sum);
+            LOCALPATCHCONV(particle_data_output,y_update_index[(j+3-filter_offset)%3],threadIdx.z,threadIdx.x,j-2,neighbour_sum);
 
 
         }
@@ -803,7 +804,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     if(y_update_flag[threadIdx.z][threadIdx.x][(y_num-2)%3]==1){ //the last particle (if it exists)
         float neighbour_sum = 0;
-        LOCALPATCHCONV(particle_data_output,particle_global_index_begin+y_update_index[threadIdx.z][threadIdx.x][(y_num+3-2)%3],threadIdx.z,threadIdx.x,y_num-2,neighbour_sum);
+        LOCALPATCHCONV(particle_data_output,y_update_index[(y_num+3-2)%3],threadIdx.z,threadIdx.x,y_num-2,neighbour_sum);
 
     }
 
@@ -813,7 +814,7 @@ __global__ void shared_update_max(const std::size_t *row_info,
 
     if(y_update_flag[threadIdx.z][threadIdx.x][(y_num-1)%3]==1){ //the last particle (if it exists)
         float neighbour_sum = 0;
-        LOCALPATCHCONV(particle_data_output,particle_global_index_begin+y_update_index[threadIdx.z][threadIdx.x][(y_num+3-1)%3],threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
+        LOCALPATCHCONV(particle_data_output,y_update_index[(y_num+3-1)%3],threadIdx.z,threadIdx.x,y_num-1,neighbour_sum);
     }
 
 
