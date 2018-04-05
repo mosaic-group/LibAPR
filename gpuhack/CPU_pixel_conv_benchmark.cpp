@@ -219,15 +219,15 @@ int main(int argc, char **argv) {
     std::cout << "Pixel filter 555 (OpenMP) took: " << time_pixels555*1000 << " ms" << std::endl;
     std::cout << "Pixel filter 555 (OpenMP) per-million pixels: " << 1000*(time_pixels555*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
 
-    float time_pixels333s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
-
-    std::cout << "Pixel filter 333 (serial) took: " << time_pixels333s*1000 << " ms" << std::endl;
-    std::cout << "Pixel filter 333 (serial) per-million pixels: " << 1000*(time_pixels333s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
-
-    float time_pixels555s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,2);
-
-    std::cout << "Pixel filter 555 (serial) took: " << time_pixels555s*1000 << " ms" << std::endl;
-    std::cout << "Pixel filter 555 (serial) per-million pixels: " << 1000*(time_pixels555s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
+//    float time_pixels333s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,1);
+//
+//    std::cout << "Pixel filter 333 (serial) took: " << time_pixels333s*1000 << " ms" << std::endl;
+//    std::cout << "Pixel filter 333 (serial) per-million pixels: " << 1000*(time_pixels333s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
+//
+//    float time_pixels555s = pixels_linear_neighbour_access_serial<uint16_t,uint16_t>(apr.orginal_dimensions(0),apr.orginal_dimensions(1),apr.orginal_dimensions(2),number_repeats,2);
+//
+//    std::cout << "Pixel filter 555 (serial) took: " << time_pixels555s*1000 << " ms" << std::endl;
+//    std::cout << "Pixel filter 555 (serial) per-million pixels: " << 1000*(time_pixels555s*1000000)/(1.0f*apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2)) << " ms" << std::endl;
 
 }
 

@@ -1767,7 +1767,6 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
                                  parent_cache[4][current_y_p % 16] + parent_cache[5][current_y_p % 16] +
                                  parent_cache[6][current_y_p % 16] + parent_cache[7][current_y_p % 16]);
 
-
                     }
 
 
