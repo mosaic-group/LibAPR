@@ -58,7 +58,7 @@ void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr
     uint64_t parent_number;
 
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
+#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
 #endif
     for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
 
@@ -92,7 +92,7 @@ void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr
         //
 
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
+#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
 #endif
         for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
 
@@ -118,7 +118,7 @@ void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr
 // #TODO OpenMP?
     if (level < apr_iterator.level_max()) {
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(dynamic) private(x) firstprivate(treeIterator)
+#pragma omp parallel for schedule(dynamic) private(x) firstprivate(treeIterator)
 #endif
         for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
             for (treeIterator.set_new_lzx(level, z , x );
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
         //then do the rest of the tree where order matters
         for (unsigned int level = treeIterator.level_max(); level >= treeIterator.level_min(); --level) {
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
+#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
 #endif
             for (parent_number = treeIterator.particles_level_begin(level);
                  parent_number < treeIterator.particles_level_end(level); ++parent_number) {
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
                 tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
             }
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
+#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
 #endif
             for (parent_number = treeIterator.particles_level_begin(level);
                  parent_number < treeIterator.particles_level_end(level); ++parent_number) {
@@ -247,12 +247,78 @@ int main(int argc, char **argv) {
 //                }
 //        }
 
+
+    timer.start_timer("down sample particles 2");
+
+
+
+    for (int m = 0; m < num_rep ; ++m) {
+
+        int x = 0;
+        //do the APR tree step
+        std::fill(child_counter.data.begin(), child_counter.data.end(), 0);
+        std::fill(tree_data.data.begin(), tree_data.data.end(), 0);
+
+
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(static) private(particle_number) firstprivate(apr_iterator, parentIterator)
+#endif
+        for (particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
+            //This step is required for all loops to set the iterator by the particle number
+            apr_iterator.set_iterator_to_particle_by_number(particle_number);
+            //set parent
+            parentIterator.set_iterator_to_parent(apr_iterator);
+
+            tree_data[parentIterator] = apr.particles_intensities[apr_iterator] + tree_data[parentIterator];
+            child_counter[parentIterator]++;
+        }
+
+        //then do the rest of the tree where order matters
+        for (unsigned int level = treeIterator.level_max(); level >= treeIterator.level_min(); --level) {
+
+            for(int z = 0;z < apr.spatial_index_z_max(level);z++) {
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(x) firstprivate(treeIterator)
+#endif
+                for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
+                    for (treeIterator.set_new_lzx(level, z, x);
+                         treeIterator.global_index() < treeIterator.particles_zx_end(level, z,
+                                                                                     x); treeIterator.set_iterator_to_particle_next_particle()) {
+                        tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
+
+                    }
+                }
+            }
+
+            for(int z = 0;z < apr.spatial_index_z_max(level);z++) {
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(x) firstprivate(treeIterator, parentIterator)
+#endif
+                for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
+                    for (treeIterator.set_new_lzx(level, z, x);
+                         treeIterator.global_index() < treeIterator.particles_zx_end(level, z,
+                                                                                     x); treeIterator.set_iterator_to_particle_next_particle()) {
+                        if (parentIterator.set_iterator_to_parent(treeIterator)) {
+                            tree_data[parentIterator] = tree_data[treeIterator] + tree_data[parentIterator];
+                            child_counter[parentIterator]++;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    timer.stop_timer();
+
+
+
+
 	// treeIterator only stores the Inside of the tree
    /****** End of filling **********/
 
     ExtraParticleData<float> part_sum(apr);
 
-
+    std::cout << 1000000.0*1000*ds_time/(num_rep*(1.0f)*apr.total_number_particles())  << " ms million DS Tree" << std::endl;
     const int stencil_half = options.stencil_size;
     const int stencil_size = 2*stencil_half + 1;
 
@@ -275,7 +341,7 @@ int main(int argc, char **argv) {
 
 
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(static) private(particle_number) firstprivate(apr_iterator, parentIterator)
+#pragma omp parallel for schedule(static) private(particle_number) firstprivate(apr_iterator, parentIterator)
 #endif
         for (particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
             //This step is required for all loops to set the iterator by the particle number
@@ -401,7 +467,7 @@ int main(int argc, char **argv) {
 
     std::cout << 1000*time/(num_rep*(1.0f)) << " ms  CONV" << std::endl;
     std::cout << 1000000.0*1000*time/(num_rep*(1.0f)*apr.total_number_particles()) << " ms  million particles CONV" << std::endl;
-    std::cout << 1000000.0*1000*ds_time/(num_rep*(1.0f)*apr.total_number_particles())  << " ms million DS Tree" << std::endl;
+
     //check the result
 
     bool success = true;
