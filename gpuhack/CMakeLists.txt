@@ -35,7 +35,7 @@ buildTarget(Cpu_dense_tree)
 #buildTarget(Cpu_neighbour_access_Tree)
 buildTarget(Cpu_neighbour_access_Tree_stencil)
 buildTarget(CPU_pixel_conv_benchmark)
-
+buildTarget(CPU_pixel_downsample)
 
 #buildGPUTarget(GPU_full_storage)
 #buildGPUTarget(GPU_insert_dense)
