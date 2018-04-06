@@ -58,7 +58,7 @@ void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr
     uint64_t parent_number;
 
 #ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
+//#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
 #endif
     for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
 
@@ -92,7 +92,7 @@ void update_dense_array(const uint64_t level,const uint64_t z,APR<uint16_t>& apr
         //
 
 #ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
+//#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
 #endif
         for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
 
