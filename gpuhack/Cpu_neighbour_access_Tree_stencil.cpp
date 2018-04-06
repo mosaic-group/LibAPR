@@ -200,7 +200,7 @@ int main(int argc, char **argv) {
 
 
 #ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(static) private(particle_number) firstprivate(apr_iterator, parentIterator)
+//#pragma omp parallel for schedule(static) private(particle_number) firstprivate(apr_iterator, parentIterator)
 #endif
         for (particle_number = 0; particle_number < apr.total_number_particles(); ++particle_number) {
             //This step is required for all loops to set the iterator by the particle number
@@ -215,7 +215,7 @@ int main(int argc, char **argv) {
         //then do the rest of the tree where order matters
         for (unsigned int level = treeIterator.level_max(); level >= treeIterator.level_min(); --level) {
 #ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
+//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
 #endif
             for (parent_number = treeIterator.particles_level_begin(level);
                  parent_number < treeIterator.particles_level_end(level); ++parent_number) {
@@ -223,7 +223,7 @@ int main(int argc, char **argv) {
                 tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
             }
 #ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
+//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
 #endif
             for (parent_number = treeIterator.particles_level_begin(level);
                  parent_number < treeIterator.particles_level_end(level); ++parent_number) {
