@@ -112,7 +112,7 @@ int main(int argc, char **argv) {
 
     float cpu_iterate_time_batch = timer.timings.back();
     std::cout << "CPU down-sample average total: " << (cpu_iterate_time_batch/(num_rep*1.0f))*1000 << " ms" << std::endl;
-    std::cout << "CPU down-sample average per million:  " << (cpu_iterate_time_batch/(num_rep*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
+    std::cout << "CPU down-sample average per million:  " << (cpu_iterate_time_batch/(num_rep*1.0f*input_data.mesh.size()))*1000.0*1000000.0f << " ms" << std::endl;
 
 
 
