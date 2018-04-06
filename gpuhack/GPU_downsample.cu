@@ -268,7 +268,10 @@ int main(int argc, char **argv) {
     tree_mean_gpu.gpu_data.clear();
     tree_mean_gpu.gpu_data.shrink_to_fit();
 
-
+    std::cout << "Total number parts: " << apr.total_number_particles() << std::endl;
+    std::cout << "Total number pixels: " << apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2) << std::endl;
+    std::cout << "Total size of tree: " << aprTree.total_number_parent_cells() << std::endl;
+    std::cout << "CR: " << (apr.orginal_dimensions(0)*apr.orginal_dimensions(1)*apr.orginal_dimensions(2))/(apr.total_number_particles()*1.0f) << std::endl;
 
     cudaDeviceSynchronize();
 

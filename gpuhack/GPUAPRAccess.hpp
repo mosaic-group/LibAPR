@@ -365,7 +365,8 @@ public:
 
         timer.start_timer("transfer y");
         d_y_part_coord.resize(aprIt.total_number_particles());
-        std::cout << (aprIt.total_number_particles()*2.0f/1000000.0f) << std::endl;
+        std::cout << "Size of access data y: " << (aprIt.total_number_particles()*2.0f/1000000.0f) << " MB" << std::endl;
+        std::cout << "Size of offset data: " << (h_level_offset.size()*8.0f/1000000.0f) << " MB" << std::endl;
 
         thrust::copy(y_explicit.begin(), y_explicit.end(),d_y_part_coord.data()); //y-coordinates
 
@@ -378,7 +379,7 @@ public:
 
         timer.stop_timer();
 
-
+        std::cout << "Size of offset data: " << (row_global_index.size()*8.0f/1000000.0f) << " MB" << std::endl;
 
 
         //Figuring out how many particles per chunk are required
