@@ -213,15 +213,15 @@ int main(int argc, char **argv) {
         }
 
         //then do the rest of the tree where order matters
-        for (unsigned int level = treeIterator.level_max(); level >= treeIterator.level_min(); --level) {
-#ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
-#endif
-            for (parent_number = treeIterator.particles_level_begin(level);
-                 parent_number < treeIterator.particles_level_end(level); ++parent_number) {
-                treeIterator.set_iterator_to_particle_by_number(parent_number);
-                tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
-            }
+//        for (unsigned int level = treeIterator.level_max(); level >= treeIterator.level_min(); --level) {
+//#ifdef HAVE_OPENMP
+//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
+//#endif
+//            for (parent_number = treeIterator.particles_level_begin(level);
+//                 parent_number < treeIterator.particles_level_end(level); ++parent_number) {
+//                treeIterator.set_iterator_to_particle_by_number(parent_number);
+//                tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
+//            }
 //#ifdef HAVE_OPENMP
 //#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
 //#endif
@@ -234,7 +234,7 @@ int main(int argc, char **argv) {
 //                    child_counter[parentIterator]++;
 //                }
 //            }
-        }
+//        }
     }
 
     timer.stop_timer();
