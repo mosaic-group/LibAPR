@@ -222,18 +222,18 @@ int main(int argc, char **argv) {
                 treeIterator.set_iterator_to_particle_by_number(parent_number);
                 tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
             }
-#ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
-#endif
-            for (parent_number = treeIterator.particles_level_begin(level);
-                 parent_number < treeIterator.particles_level_end(level); ++parent_number) {
-
-                treeIterator.set_iterator_to_particle_by_number(parent_number);
-                if (parentIterator.set_iterator_to_parent(treeIterator)) {
-                    tree_data[parentIterator] = tree_data[treeIterator] + tree_data[parentIterator];
-                    child_counter[parentIterator]++;
-                }
-            }
+//#ifdef HAVE_OPENMP
+//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
+//#endif
+//            for (parent_number = treeIterator.particles_level_begin(level);
+//                 parent_number < treeIterator.particles_level_end(level); ++parent_number) {
+//
+//                treeIterator.set_iterator_to_particle_by_number(parent_number);
+//                if (parentIterator.set_iterator_to_parent(treeIterator)) {
+//                    tree_data[parentIterator] = tree_data[treeIterator] + tree_data[parentIterator];
+//                    child_counter[parentIterator]++;
+//                }
+//            }
         }
     }
 
