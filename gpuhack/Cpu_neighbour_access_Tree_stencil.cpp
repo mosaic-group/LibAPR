@@ -356,7 +356,7 @@ int main(int argc, char **argv) {
         //then do the rest of the tree where order matters
         for (unsigned int level = treeIterator.level_max(); level >= treeIterator.level_min(); --level) {
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
+#pragma omp parallel for schedule(static) private(parent_number) firstprivate(treeIterator)
 #endif
             for (parent_number = treeIterator.particles_level_begin(level);
                  parent_number < treeIterator.particles_level_end(level); ++parent_number) {
@@ -364,7 +364,7 @@ int main(int argc, char **argv) {
                 tree_data[treeIterator] /= (1.0 * child_counter[treeIterator]);
             }
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
+#pragma omp parallel for schedule(static) private(parent_number) firstprivate(parentIterator, treeIterator)
 #endif
             for (parent_number = treeIterator.particles_level_begin(level);
                  parent_number < treeIterator.particles_level_end(level); ++parent_number) {
@@ -417,7 +417,7 @@ int main(int argc, char **argv) {
                     //padding
                     uint64_t index = temp_vec.x_num * temp_vec.y_num * ((z+stencil_half)%stencil_size);
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(static) private(x)
+#pragma omp parallel for schedule(static) private(x)
 #endif
                     for (x = 0; x < temp_vec.x_num; ++x) {
                         std::fill(temp_vec.mesh.begin() + index + (x + 0) * temp_vec.y_num ,
@@ -428,7 +428,7 @@ int main(int argc, char **argv) {
 
 
 #ifdef HAVE_OPENMP
-//#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
+#pragma omp parallel for schedule(dynamic) private(x) firstprivate(apr_iterator)
 #endif
                 for (x = 0; x < apr.spatial_index_x_max(level); ++x) {
                     for (apr_iterator.set_new_lzx(level, z, x);
