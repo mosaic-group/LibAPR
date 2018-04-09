@@ -165,12 +165,12 @@ public:
     APRIsoConvGPU(APR<T>& apr,APRTree<T>& aprTree){
 
         //intiitalize the access data on the GPU
-        APRIterator<T> aprIterator;
+        APRIterator<T> aprIterator(apr);
         gpuaprAccess.initialize_gpu_access_alternate(aprIterator);
 
         number_particles = aprIterator.total_number_particles();
 
-        APRTreeIterator<T> aprTreeIterator;
+        APRTreeIterator<T> aprTreeIterator(aprTree);
         gpuaprAccessTree.initialize_gpu_access_alternate(aprTreeIterator);
         number_interior_particle_cells = aprTreeIterator.total_number_particles();
     }
@@ -178,7 +178,7 @@ public:
     template<typename T>
     void isotropic_convolve_333(APR<T>& apr,ExtraParticleData<uint16_t>& input_particles,
                                 ExtraParticleData<uint16_t>& output_particles,
-                                ExtraParticleData<float>& conv_stencil,
+                                std::vector<float>& conv_stencil,
                                 ExtraParticleData<uint16_t>& tree_temp){
         /*
          *  Perform APR Isotropic Convolution Operation on the GPU with a 3x3x3 kernel
@@ -187,17 +187,21 @@ public:
 
         APRIterator<uint16_t> aprIt(apr);
 
-
-        tree_temp.init_gpu(number_interior_particle_cells);
+        if(tree_temp.gpu_data.size()!=number_interior_particle_cells) {
+            tree_temp.init_gpu(number_interior_particle_cells);
+        }
 
         /*
         *  Test the x,y,z,level information is correct
         *
         */
+        if(input_particles.gpu_data.size()!=number_particles) {
+            input_particles.copy_data_to_gpu();
+        }
 
-        input_particles.copy_data_to_gpu();
-
-        output_particles.init_gpu(number_particles);
+        if(output_particles.gpu_data.size()!=number_particles) {
+            output_particles.init_gpu(number_particles);
+        }
 
         cudaDeviceSynchronize();
 
