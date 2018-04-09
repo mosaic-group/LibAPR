@@ -24,9 +24,9 @@
 
 #include "GPUAPRAccess.hpp"
 #include "../src/data_structures/APR/APR.hpp"
-#include "GPU_downsample.hpp"
+#include "APRDownsampleGPU.hpp"
 
-#include "APRGPUIsoConv.hpp"
+#include "APRIsoConvGPU.hpp"
 
 struct cmdLineOptions{
     std::string output = "output";
