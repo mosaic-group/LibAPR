@@ -69,6 +69,10 @@ float pixels_linear_neighbour_access_openmp(uint64_t y_num,uint64_t x_num,uint64
     //float neigh_sum = 0;
     float norm = pow(stencil_half*2+1,3);
 
+    std::vector<float> stencil;
+    stencil.resize(stencil_half*2+1,1.0f);
+
+
     for(int r = 0;r < num_repeats;r++){
 
 #ifdef HAVE_OPENMP
@@ -87,15 +91,18 @@ float pixels_linear_neighbour_access_openmp(uint64_t y_num,uint64_t x_num,uint64
                     int max_i = std::min((int)x_num-1,i+stencil_half);
                     int max_k = std::min((int)y_num-1,k+stencil_half);
 
+                    int counter = 0;
+
                     for (int j_n = min_j; j_n < max_j+1; ++j_n) {
                         for (int i_n = min_i; i_n < max_i+1; ++i_n) {
                             for (int k_n = min_k; k_n < max_k+1; ++k_n) {
-                                neigh_sum += input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
+                                neigh_sum += stencil[counter]*input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
+                                counter++;
                             }
                         }
                     }
 
-                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::roundf(neigh_sum/norm);
+                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::roundf(neigh_sum);
 
                 }
             }
@@ -133,6 +140,10 @@ float pixels_linear_neighbour_access_serial(uint64_t y_num,uint64_t x_num,uint64
     //float neigh_sum = 0;
     float norm = pow(stencil_half*2+1,3);
 
+    std::vector<float> stencil;
+    stencil.resize(stencil_half*2+1,1.0f);
+
+
     for(int r = 0;r < num_repeats;r++) {
 
         for(j = 0; j < (z_num);j++){
@@ -148,15 +159,18 @@ float pixels_linear_neighbour_access_serial(uint64_t y_num,uint64_t x_num,uint64
                     int max_i = std::min((int)x_num-1,i+stencil_half);
                     int max_k = std::min((int)y_num-1,k+stencil_half);
 
+                    int counter = 0;
+
                     for (int j_n = min_j; j_n < max_j+1; ++j_n) {
                         for (int i_n = min_i; i_n < max_i+1; ++i_n) {
                             for (int k_n = min_k; k_n < max_k+1; ++k_n) {
-                                neigh_sum += input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
+                                neigh_sum += stencil[counter]*input_data.mesh[j_n*x_num*y_num + i_n*y_num + k_n];
+                                counter++;
                             }
                         }
                     }
 
-                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::roundf(neigh_sum/norm);
+                    output_data.mesh[j*x_num*y_num + i*y_num + k] = std::roundf(neigh_sum);
 
                 }
             }
