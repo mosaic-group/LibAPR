@@ -77,7 +77,7 @@ cmdLineOptions read_command_line_options(int argc, char **argv) {
     return result;
 }
 
-void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<uint16_t> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<uint16_t>& part_tree,std::vector<double>& stencil, const int stencil_size, const int stencil_half){
+void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<uint16_t> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<uint16_t>& part_tree,std::vector<float>& stencil, const int stencil_size, const int stencil_half){
 
     for (uint64_t level_local = apr_iterator.level_max(); level_local >= apr_iterator.level_min(); --level_local) {
 
@@ -176,7 +176,8 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
                 for (apr_iterator.set_new_lzx(level, z, x);
                      apr_iterator.global_index() < apr_iterator.particles_zx_end(level, z,
                                                                                  x); apr_iterator.set_iterator_to_particle_next_particle()) {
-                    double neigh_sum = 0;
+                    float neigh_sum = 0;
+
                     float counter = 0;
 
                     const int k = apr_iterator.y(); // offset to allow for boundary padding
@@ -194,13 +195,12 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
                                     }
                                 }
 
-
                                 counter++;
                             }
                         }
                     }
 
-                    test_particles[apr_iterator] = std::round(neigh_sum/(1.0f*pow(stencil_size,3)));
+                    test_particles[apr_iterator] = std::roundf(neigh_sum);
 
                 }
             }
@@ -287,11 +287,12 @@ int main(int argc, char **argv) {
     output_particles.init_gpu(apr.total_number_particles());
 
     std::vector<float> conv_stencil;
+    //conv_stencil.resize(27,1.0f/27.0f);
+
+    conv_stencil.resize(27,.12);
 
     ExtraParticleData<uint16_t> tree_temp(aprTree);
     tree_temp.init_gpu(aprTree.total_number_parent_cells());
-
-
 
     APRIsoConvGPU isoConvGPU(apr,aprTree);
 
@@ -338,10 +339,9 @@ int main(int argc, char **argv) {
     /// Now check the data
     ///
     ////////////////////////////
-    std::vector<double> stencil;
-    stencil.resize(27,1);
+
     ExtraParticleData<uint16_t> output(apr);
-    create_test_particles( apr, aprIt,treeIt,output,apr.particles_intensities,tree_temp,stencil, 3, 1);
+    create_test_particles( apr, aprIt,treeIt,output,apr.particles_intensities,tree_temp,conv_stencil, 3, 1);
     bool success = true;
 
     uint64_t c_fail= 0;

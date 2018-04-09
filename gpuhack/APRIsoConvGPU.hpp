@@ -9,17 +9,17 @@
 neighbour_sum=0;\
 if (not_ghost) {\
     for (int q = 0; q < 3; ++q) {\
-        neighbour_sum += local_patch[z + q - 1][x + 0 - 1][(y+N)%N]\
-                 + local_patch[z + q - 1][x + 0 - 1][(y+N-1)%N]\
-                 + local_patch[z + q - 1][x + 0 - 1][(y+N+1)%N]\
-                 + local_patch[z + q - 1][x + 1 - 1][(y+N)%N]\
-                 + local_patch[z + q - 1][x + 1 - 1][(y+N-1)%N]\
-                 + local_patch[z + q - 1][x + 1 - 1][(y+N+1)%N]\
-                 + local_patch[z + q - 1][x + 2 - 1][(y+N)%N]\
-                 + local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]\
-                 + local_patch[z + q - 1][x + 2 - 1][(y+N+1)%N];\
+        neighbour_sum += stencil[q*9]*local_patch[z + q - 1][x + 0 - 1][(y+N)%N]\
+                 + stencil[q*9+1]*local_patch[z + q - 1][x + 0 - 1][(y+N-1)%N]\
+                 + stencil[q*9+2]*local_patch[z + q - 1][x + 0 - 1][(y+N+1)%N]\
+                 + stencil[q*9+3]*local_patch[z + q - 1][x + 1 - 1][(y+N)%N]\
+                 + stencil[q*9+4]*local_patch[z + q - 1][x + 1 - 1][(y+N-1)%N]\
+                 + stencil[q*9+5]*local_patch[z + q - 1][x + 1 - 1][(y+N+1)%N]\
+                 + stencil[q*9+6]*local_patch[z + q - 1][x + 2 - 1][(y+N)%N]\
+                 + stencil[q*9+7]*local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]\
+                 + stencil[q*9+8]*local_patch[z + q - 1][x + 2 - 1][(y+N+1)%N];\
     }\
-    particle_output[index] = std::roundf(neighbour_sum / 27.0f);\
+    particle_output[index] = std::roundf(neighbour_sum);\
 }\
 
 #define LOCALPATCHCONV555(particle_output,index,z,x,y,neighbour_sum)\
@@ -83,7 +83,8 @@ __global__ void conv_max_333(const std::size_t *row_info,
                              const std::uint16_t *level_x_num,
                              const std::uint16_t *level_z_num,
                              const std::uint16_t *level_y_num,
-                             const std::size_t level);
+                             const std::size_t level,
+                             const std::float_t *stencil);
 template<typename treeType>
 __global__ void conv_interior_333(const std::size_t *row_info,
                                   const std::uint16_t *particle_y,
@@ -97,7 +98,8 @@ __global__ void conv_interior_333(const std::size_t *row_info,
                                   const std::uint16_t *level_x_num,
                                   const std::uint16_t *level_z_num,
                                   const std::uint16_t *level_y_num,
-                                  const std::size_t level);
+                                  const std::size_t level,
+                                  const std::float_t *stencil);
 
 template<typename treeType>
 __global__ void conv_min_333(const std::size_t *row_info,
@@ -112,7 +114,8 @@ __global__ void conv_min_333(const std::size_t *row_info,
                              const std::uint16_t *level_x_num,
                              const std::uint16_t *level_z_num,
                              const std::uint16_t *level_y_num,
-                             const std::size_t level);
+                             const std::size_t level,
+                             const std::float_t *stencil);
 
 __global__ void conv_max_555(const std::size_t *row_info,
                              const std::uint16_t *particle_y,
@@ -183,6 +186,7 @@ public:
         /*
          *  Perform APR Isotropic Convolution Operation on the GPU with a 3x3x3 kernel
          *
+         *  conv_stencil needs to have 27 entries
          */
 
         APRIterator<uint16_t> aprIt(apr);
@@ -202,6 +206,15 @@ public:
         if(output_particles.gpu_data.size()!=number_particles) {
             output_particles.init_gpu(number_particles);
         }
+
+        //stencil
+        thrust::device_vector<float> gpu_stencil;
+        float* gpu_stencil_pointer;
+
+        gpu_stencil.resize(conv_stencil.size());
+
+        thrust::copy(conv_stencil.begin(),conv_stencil.end(),gpu_stencil.begin());//set up the pointers
+        gpu_stencil_pointer = thrust::raw_pointer_cast(gpu_stencil.data());
 
         cudaDeviceSynchronize();
 
@@ -288,7 +301,7 @@ public:
                                                     gpuaprAccess.gpu_access.level_x_num,
                                                     gpuaprAccess.gpu_access.level_z_num,
                                                     gpuaprAccess.gpu_access.level_y_num,
-                                                    level);
+                                                    level,gpu_stencil_pointer);
 
             } else if (level == apr.level_max()) {
                 conv_max_333 << < blocks_l, threads_l >> >
@@ -300,7 +313,7 @@ public:
                                                     gpuaprAccess.gpu_access.level_x_num,
                                                     gpuaprAccess.gpu_access.level_z_num,
                                                     gpuaprAccess.gpu_access.level_y_num,
-                                                    level);
+                                                    level,gpu_stencil_pointer);
 
             } else {
                 conv_interior_333 << < blocks_l, threads_l >> >
@@ -316,7 +329,7 @@ public:
                                                          gpuaprAccess.gpu_access.level_x_num,
                                                          gpuaprAccess.gpu_access.level_z_num,
                                                          gpuaprAccess.gpu_access.level_y_num,
-                                                         level);
+                                                         level,gpu_stencil_pointer);
             }
             cudaDeviceSynchronize();
 
@@ -341,7 +354,9 @@ __global__ void conv_max_333(const std::size_t *row_info,
                              const std::uint16_t *level_x_num,
                              const std::uint16_t *level_z_num,
                              const std::uint16_t *level_y_num,
-                             const std::size_t level) {
+                             const std::size_t level,
+                             const std::float_t *stencil
+                        ) {
 
     /*
      *
@@ -535,7 +550,9 @@ __global__ void conv_interior_333(const std::size_t *row_info,
                                   const std::uint16_t *level_x_num,
                                   const std::uint16_t *level_z_num,
                                   const std::uint16_t *level_y_num,
-                                  const std::size_t level) {
+                                  const std::size_t level,
+                                  const std::float_t *stencil
+) {
     /*
      *
      *  Here we update both those Particle Cells at a level below and above.
@@ -768,7 +785,8 @@ __global__ void conv_min_333(const std::size_t *row_info,
                              const std::uint16_t *level_x_num,
                              const std::uint16_t *level_z_num,
                              const std::uint16_t *level_y_num,
-                             const std::size_t level) {
+                             const std::size_t level,
+                             const std::float_t *stencil) {
 
     /*
      *
