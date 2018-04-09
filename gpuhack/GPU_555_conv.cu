@@ -76,7 +76,7 @@ cmdLineOptions read_command_line_options(int argc, char **argv) {
     return result;
 }
 
-void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<float> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<float>& part_tree,std::vector<double>& stencil, const int stencil_size, const int stencil_half){
+void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterator,APRTreeIterator<uint16_t>& apr_tree_iterator,ExtraParticleData<uint16_t> &test_particles,ExtraParticleData<uint16_t>& particles,ExtraParticleData<uint16_t>& part_tree,std::vector<float>& stencil, const int stencil_size, const int stencil_half){
 
     for (uint64_t level_local = apr_iterator.level_max(); level_local >= apr_iterator.level_min(); --level_local) {
 
@@ -176,7 +176,7 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
                      apr_iterator.global_index() < apr_iterator.particles_zx_end(level, z,
                                                                                  x); apr_iterator.set_iterator_to_particle_next_particle()) {
                     float neigh_sum = 0;
-                    float counter = 0;
+                    int counter = 0;
 
                     const int k = apr_iterator.y(); // offset to allow for boundary padding
                     const int i = x;
@@ -199,7 +199,7 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
                         }
                     }
 
-                    test_particles[apr_iterator] = std::roundf(neigh_sum/(1.0f*pow(stencil_size,3)));
+                    test_particles[apr_iterator] = std::roundf(neigh_sum);
 
                 }
             }
@@ -214,48 +214,6 @@ void create_test_particles(APR<uint16_t>& apr,APRIterator<uint16_t>& apr_iterato
     }
 
 }
-
-
-__global__ void shared_update_max(const std::size_t *row_info,
-                                  const std::uint16_t *particle_y,
-                                  const std::uint16_t *particle_data_input,
-                                  std::uint16_t *particle_data_output,
-                                  const std::size_t* level_offset,
-                                  const std::uint16_t* level_x_num,
-                                  const std::uint16_t* level_z_num,
-                                  const std::uint16_t* level_y_num,
-                                  const std::size_t level) ;
-
-__global__ void shared_update_min(const std::size_t *row_info,
-                                  const std::uint16_t *particle_y,
-                                  const std::size_t* level_offset,
-                                  const std::uint16_t *particle_data_input,
-                                  const std::size_t *row_info_child,
-                                  const std::uint16_t *particle_y_child,
-                                  const std::size_t* level_offset_child,
-                                  const std::float_t *particle_data_input_child,
-                                  std::uint16_t *particle_data_output,
-                                  const std::uint16_t* level_x_num,
-                                  const std::uint16_t* level_z_num,
-                                  const std::uint16_t* level_y_num,
-                                  const std::size_t level) ;
-
-__global__ void shared_update_interior_level(const std::size_t *row_info,
-                                             const std::uint16_t *particle_y,
-                                             const std::size_t* level_offset,
-                                             const std::uint16_t *particle_data_input,
-                                             const std::size_t *row_info_child,
-                                             const std::uint16_t *particle_y_child,
-                                             const std::size_t* level_offset_child,
-                                             const std::float_t *particle_data_input_child,
-                                             std::uint16_t *particle_data_output,
-                                             const std::uint16_t* level_x_num,
-                                             const std::uint16_t* level_z_num,
-                                             const std::uint16_t* level_y_num,
-                                             const std::size_t level);
-
-
-
 
 
 ExtraParticleData<float> meanDownsamplingOld(APR<uint16_t> &aInputApr, APRTree<uint16_t> &aprTree) {
@@ -373,12 +331,17 @@ int main(int argc, char **argv) {
     apr.particles_intensities.copy_data_to_gpu();
 
 
+    std::vector<float> stencil;
+    //stencil.resize(125,.30f);
+    stencil.resize(125,1.0/125.0f);
 
-    ExtraParticleData<uint16_t> spatial_info_test3(apr);
-    spatial_info_test3.init_gpu(apr.total_number_particles());
+    ExtraParticleData<uint16_t> output_particles(apr);
+    output_particles.init_gpu(apr.total_number_particles());
 
-    ExtraParticleData<float> tree_mean_gpu(aprTree);
-    tree_mean_gpu.init_gpu(aprTree.total_number_parent_cells());
+    ExtraParticleData<uint16_t> tree_temp(aprTree);
+    tree_temp.init_gpu(aprTree.total_number_parent_cells());
+
+    APRIsoConvGPU isoConvGPU(apr,aprTree);
 
     cudaDeviceSynchronize();
     for (int i = 0; i < 2; ++i) {
@@ -386,129 +349,27 @@ int main(int argc, char **argv) {
         timer.start_timer("summing the sptial informatino for each partilce on the GPU");
         for (int rep = 0; rep < number_reps; ++rep) {
 
-            for (int level = apr.level_max(); level > aprIt.level_min(); --level) {
-
-                std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
-                std::size_t offset = gpuaprAccess.h_level_offset[level];
-
-                std::size_t x_num = apr.spatial_index_x_max(level);
-                std::size_t z_num = apr.spatial_index_z_max(level);
-                std::size_t y_num = apr.spatial_index_y_max(level);
-
-                dim3 threads_l(128, 1, 1);
-
-                int x_blocks = (x_num + 2 - 1) / 2;
-                int z_blocks = (z_num + 2 - 1) / 2;
-
-                dim3 blocks_l(x_blocks, 1, z_blocks);
-
-                if(level==apr.level_max()) {
-
-                    down_sample_avg << < blocks_l, threads_l >> >
-                                                   (gpuaprAccess.gpu_access.row_global_index,
-                                                           gpuaprAccess.gpu_access.y_part_coord,
-                                                           gpuaprAccess.gpu_access.level_offsets,
-                                                           apr.particles_intensities.gpu_pointer,
-                                                           gpuaprAccessTree.gpu_access.row_global_index,
-                                                           gpuaprAccessTree.gpu_access.y_part_coord,
-                                                           gpuaprAccessTree.gpu_access.level_offsets,
-                                                           tree_mean_gpu.gpu_pointer,
-                                                           gpuaprAccess.gpu_access.level_x_num,
-                                                           gpuaprAccess.gpu_access.level_z_num,
-                                                           gpuaprAccess.gpu_access.level_y_num,
-                                                           level);
-
-
-                } else {
-
-                    down_sample_avg_interior<< < blocks_l, threads_l >> >
-                                                           (gpuaprAccess.gpu_access.row_global_index,
-                                                                   gpuaprAccess.gpu_access.y_part_coord,
-                                                                   gpuaprAccess.gpu_access.level_offsets,
-                                                                   apr.particles_intensities.gpu_pointer,
-                                                                   gpuaprAccessTree.gpu_access.row_global_index,
-                                                                   gpuaprAccessTree.gpu_access.y_part_coord,
-                                                                   gpuaprAccessTree.gpu_access.level_offsets,
-                                                                   tree_mean_gpu.gpu_pointer,
-                                                                   gpuaprAccess.gpu_access.level_x_num,
-                                                                   gpuaprAccess.gpu_access.level_z_num,
-                                                                   gpuaprAccess.gpu_access.level_y_num,
-                                                                   level);
-                }
-                cudaDeviceSynchronize();
-            }
+            isoConvGPU.isotropic_convolve_555(apr,apr.particles_intensities,
+                                              output_particles,
+                                              stencil,
+                                              tree_temp);
 
             cudaDeviceSynchronize();
-
-            for (int level = apr.level_max(); level >= apr.level_min(); --level) {
-
-                std::size_t number_rows_l = apr.spatial_index_x_max(level) * apr.spatial_index_z_max(level);
-                std::size_t offset = gpuaprAccess.h_level_offset[level];
-
-                std::size_t x_num = apr.spatial_index_x_max(level);
-                std::size_t z_num = apr.spatial_index_z_max(level);
-                std::size_t y_num = apr.spatial_index_y_max(level);
-
-                dim3 threads_l(12, 1, 12);
-
-                int x_blocks = (x_num + 8 - 1) / 8;
-                int z_blocks = (z_num + 8 - 1) / 8;
-
-                dim3 blocks_l(x_blocks, 1, z_blocks);
-
-                if (level == apr.level_min()) {
-                    conv_min_555 << < blocks_l, threads_l >> >
-                                                     (gpuaprAccess.gpu_access.row_global_index,
-                                                             gpuaprAccess.gpu_access.y_part_coord,
-                                                             gpuaprAccess.gpu_access.level_offsets,
-                                                             apr.particles_intensities.gpu_pointer,
-                                                             gpuaprAccessTree.gpu_access.row_global_index,
-                                                             gpuaprAccessTree.gpu_access.y_part_coord,
-                                                             gpuaprAccessTree.gpu_access.level_offsets,
-                                                             tree_mean_gpu.gpu_pointer,
-                                                             spatial_info_test3.gpu_pointer,
-                                                             gpuaprAccess.gpu_access.level_x_num,
-                                                             gpuaprAccess.gpu_access.level_z_num,
-                                                             gpuaprAccess.gpu_access.level_y_num,
-                                                             level);
-
-                } else if (level == apr.level_max()) {
-                    conv_max_555 << < blocks_l, threads_l >> >
-                                                     (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
-
-                } else {
-                    conv_interior_555 << < blocks_l, threads_l >> >
-                                                                (gpuaprAccess.gpu_access.row_global_index,
-                                                                        gpuaprAccess.gpu_access.y_part_coord,
-                                                                        gpuaprAccess.gpu_access.level_offsets,
-                                                                        apr.particles_intensities.gpu_pointer,
-                                                                        gpuaprAccessTree.gpu_access.row_global_index,
-                                                                        gpuaprAccessTree.gpu_access.y_part_coord,
-                                                                        gpuaprAccessTree.gpu_access.level_offsets,
-                                                                        tree_mean_gpu.gpu_pointer,
-                                                                        spatial_info_test3.gpu_pointer,
-                                                                        gpuaprAccess.gpu_access.level_x_num,
-                                                                        gpuaprAccess.gpu_access.level_z_num,
-                                                                        gpuaprAccess.gpu_access.level_y_num,
-                                                                        level);
-                }
-                cudaDeviceSynchronize();
-            }
         }
 
         timer.stop_timer();
     }
 
     float gpu_iterate_time_si3 = timer.timings.back();
-    spatial_info_test3.copy_data_to_host();
+    output_particles.copy_data_to_host();
 
-    spatial_info_test3.gpu_data.clear();
-    spatial_info_test3.gpu_data.shrink_to_fit();
+    output_particles.gpu_data.clear();
+    output_particles.gpu_data.shrink_to_fit();
 
-    tree_mean_gpu.copy_data_to_host();
+    tree_temp.copy_data_to_host();
 
-    tree_mean_gpu.gpu_data.clear();
-    tree_mean_gpu.gpu_data.shrink_to_fit();
+    tree_temp.gpu_data.clear();
+    tree_temp.gpu_data.shrink_to_fit();
 
     std::cout << "Average time for loop insert max: " << (gpu_iterate_time_si3/(number_reps*1.0f))*1000 << " ms" << std::endl;
     std::cout << "Average time for loop insert max per million particles: " << (gpu_iterate_time_si3/(apr.total_number_particles()*number_reps*1.0f))*1000*1000000.0f << " ms" << std::endl;
@@ -518,10 +379,9 @@ int main(int argc, char **argv) {
     /// Now check the data
     ///
     ////////////////////////////
-    std::vector<double> stencil;
-    stencil.resize(125,1);
-    ExtraParticleData<float> output(apr);
-    create_test_particles( apr, aprIt,treeIt,output,apr.particles_intensities,tree_mean_gpu,stencil, 5, 2);
+
+    ExtraParticleData<uint16_t> output(apr);
+    create_test_particles( apr, aprIt,treeIt,output,apr.particles_intensities,tree_temp,stencil, 5, 2);
 
 
     uint64_t c_pass = 0;
@@ -533,14 +393,14 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
         //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
-        if((spatial_info_test3[aprIt]-output[aprIt])<=1){
+        if((output_particles[aprIt]-output[aprIt])<=1){
             c_pass++;
         } else {
             c_fail++;
             success = false;
             //if(aprIt.level() >= aprIt.level_max()) {
                 if (output_c < 1000) {
-                    std::cout << "Expected: " << output[aprIt] << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
+                    std::cout << "Expected: " << output[aprIt] << " Recieved: " << output_particles[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
                               << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
                     output_c++;
                 }
