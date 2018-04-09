@@ -5,7 +5,7 @@
 #ifndef LIBAPR_GPU_DOWNSAMPLE_HPP
 #define LIBAPR_GPU_DOWNSAMPLE_HPP
 
-#endif //LIBAPR_GPU_DOWNSAMPLE_HPP
+
 
 
 __device__ void get_row_begin_end(std::size_t* index_begin,
@@ -24,6 +24,7 @@ __device__ void get_row_begin_end(std::size_t* index_begin,
 
 };
 
+template<typename treeType>
 __global__ void down_sample_avg(const std::size_t *row_info,
                                 const std::uint16_t *particle_y,
                                 const std::size_t* level_offset,
@@ -31,7 +32,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
                                 const std::size_t *row_info_child,
                                 const std::uint16_t *particle_y_child,
                                 const std::size_t* level_offset_child,
-                                std::float_t *particle_data_output,
+                                treeType *particle_data_output,
                                 const std::uint16_t* level_x_num,
                                 const std::uint16_t* level_z_num,
                                 const std::uint16_t* level_y_num,
@@ -234,6 +235,7 @@ __global__ void down_sample_avg(const std::size_t *row_info,
 
 }
 
+template<typename treeType>
 __global__ void down_sample_avg_interior(const std::size_t *row_info,
                                          const std::uint16_t *particle_y,
                                          const std::size_t* level_offset,
@@ -241,7 +243,7 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
                                          const std::size_t *row_info_child,
                                          const std::uint16_t *particle_y_child,
                                          const std::size_t* level_offset_child,
-                                         std::float_t *particle_data_output,
+                                         treeType *particle_data_output,
                                          const std::uint16_t* level_x_num,
                                          const std::uint16_t* level_z_num,
                                          const std::uint16_t* level_y_num,
@@ -364,9 +366,6 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
     uint16_t sparse_block = 0;
     int sparse_block_p =0;
     int sparse_block_t =0;
-
-    float local_sum = 0;
-
 
 
     for (int y_block = 0; y_block < (number_y_chunk); ++y_block) {
@@ -505,3 +504,4 @@ __global__ void down_sample_avg_interior(const std::size_t *row_info,
 
 }
 
+#endif //LIBAPR_GPU_DOWNSAMPLE_HPP

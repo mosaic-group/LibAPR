@@ -102,6 +102,9 @@ public:
     std::size_t max_number_chunks = 8191;
     std::size_t actual_number_chunks;
 
+    //default constructor
+    GPUAPRAccess(){};
+
     template<typename T>
     GPUAPRAccess(APRIterator<T>& aprIt){
         initialize_gpu_access_alternate(aprIt);

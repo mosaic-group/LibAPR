@@ -282,17 +282,21 @@ int main(int argc, char **argv) {
     apr.particles_intensities.copy_data_to_gpu();
 
 
-    float gpu_iterate_time_si = timer.timings.back();
-    //copy data back from gpu
 
-    bool success = true;
+    ExtraParticleData<uint16_t> output_particles(apr);
+    output_particles.init_gpu(apr.total_number_particles());
 
-    uint64_t c_fail= 0;
-    uint64_t c_pass= 0;
+    std::vector<float> conv_stencil;
+
+    ExtraParticleData<uint16_t> tree_temp(aprTree);
+    tree_temp.init_gpu(aprTree.total_number_parent_cells());
+
+//    isotropic_convolve_333(apr.particles_intensities,
+//                           output_particles,
+//                           conv_stencil,
+//                           tree_temp);
 
 
-    ExtraParticleData<uint16_t> spatial_info_test3(apr);
-    spatial_info_test3.init_gpu(apr.total_number_particles());
 
     cudaDeviceSynchronize();
     for (int i = 0; i < 2; ++i) {
@@ -379,7 +383,7 @@ int main(int argc, char **argv) {
                                                              gpuaprAccessTree.gpu_access.y_part_coord,
                                                              gpuaprAccessTree.gpu_access.level_offsets,
                                                              tree_mean_gpu.gpu_pointer,
-                                                             spatial_info_test3.gpu_pointer,
+                                                             output_particles.gpu_pointer,
                                                              gpuaprAccess.gpu_access.level_x_num,
                                                              gpuaprAccess.gpu_access.level_z_num,
                                                              gpuaprAccess.gpu_access.level_y_num,
@@ -387,8 +391,15 @@ int main(int argc, char **argv) {
 
                 } else if (level == apr.level_max()) {
                     conv_max_333 << < blocks_l, threads_l >> >
-                                                     (gpuaprAccess.gpu_access.row_global_index, gpuaprAccess.gpu_access.y_part_coord, apr.particles_intensities.gpu_pointer, spatial_info_test3.gpu_pointer, gpuaprAccess.gpu_access.level_offsets, gpuaprAccess.gpu_access.level_x_num, gpuaprAccess.gpu_access.level_z_num, gpuaprAccess.gpu_access.level_y_num, level);
-
+                                                     (gpuaprAccess.gpu_access.row_global_index,
+                                                             gpuaprAccess.gpu_access.y_part_coord,
+                                                             apr.particles_intensities.gpu_pointer,
+                                                             output_particles.gpu_pointer,
+                                                             gpuaprAccess.gpu_access.level_offsets,
+                                                             gpuaprAccess.gpu_access.level_x_num,
+                                                             gpuaprAccess.gpu_access.level_z_num,
+                                                             gpuaprAccess.gpu_access.level_y_num,
+                                                             level);
 
 
                 } else {
@@ -401,7 +412,7 @@ int main(int argc, char **argv) {
                                                                         gpuaprAccessTree.gpu_access.y_part_coord,
                                                                         gpuaprAccessTree.gpu_access.level_offsets,
                                                                         tree_mean_gpu.gpu_pointer,
-                                                                        spatial_info_test3.gpu_pointer,
+                                                                        output_particles.gpu_pointer,
                                                                         gpuaprAccess.gpu_access.level_x_num,
                                                                         gpuaprAccess.gpu_access.level_z_num,
                                                                         gpuaprAccess.gpu_access.level_y_num,
@@ -418,10 +429,10 @@ int main(int argc, char **argv) {
     }
 
     float gpu_iterate_time_si3 = timer.timings.back();
-    spatial_info_test3.copy_data_to_host();
+    output_particles.copy_data_to_host();
 
-    spatial_info_test3.gpu_data.clear();
-    spatial_info_test3.gpu_data.shrink_to_fit();
+    output_particles.gpu_data.clear();
+    output_particles.gpu_data.shrink_to_fit();
 
 
     tree_mean_gpu.copy_data_to_host();
@@ -440,7 +451,10 @@ int main(int argc, char **argv) {
     stencil.resize(27,1);
     ExtraParticleData<float> output(apr);
     create_test_particles( apr, aprIt,treeIt,output,apr.particles_intensities,tree_mean_gpu,stencil, 3, 1);
+    bool success = true;
 
+    uint64_t c_fail= 0;
+    uint64_t c_pass= 0;
 
         c_pass = 0;
     c_fail = 0;
@@ -451,7 +465,7 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
         //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
-        if(spatial_info_test3[aprIt]==output[aprIt]){
+        if(output_particles[aprIt]==output[aprIt]){
             c_pass++;
         } else {
 
@@ -459,7 +473,7 @@ int main(int argc, char **argv) {
             if(aprIt.level() == aprIt.level_max()) {
                 c_fail++;
                 if (output_c < 200) {
-                    std::cout << "Expected: " << output[aprIt] << " Recieved: " << spatial_info_test3[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
+                    std::cout << "Expected: " << output[aprIt] << " Recieved: " << output_particles[aprIt] << " Level: " << aprIt.level() << " x: " << aprIt.x()
                               << " z: " << aprIt.z() << " y: " << aprIt.y() << std::endl;
                     output_c++;
                 }
