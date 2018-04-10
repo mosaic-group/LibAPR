@@ -383,7 +383,6 @@ int main(int argc, char **argv) {
     ExtraParticleData<uint16_t> output(apr);
     create_test_particles( apr, aprIt,treeIt,output,apr.particles_intensities,tree_temp,stencil, 5, 2);
 
-
     uint64_t c_pass = 0;
     uint64_t c_fail = 0;
     bool success=true;
