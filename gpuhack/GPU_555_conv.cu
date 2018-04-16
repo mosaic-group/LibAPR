@@ -330,10 +330,14 @@ int main(int argc, char **argv) {
 
     apr.particles_intensities.copy_data_to_gpu();
 
-
     std::vector<float> stencil;
-    //stencil.resize(125,.30f);
-    stencil.resize(125,1.0/125.0f);
+
+    stencil.resize(125,0);
+
+    for (int j = 0; j < stencil.size(); ++j) {
+        stencil[j] = (1.0*j)/(125.0f)*(1.0f/5.4095f);
+    }
+
 
     ExtraParticleData<uint16_t> output_particles(apr);
     output_particles.init_gpu(apr.total_number_particles());
@@ -392,7 +396,7 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
         //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
-        if((output_particles[aprIt]-output[aprIt])<=1){
+        if(abs(output_particles[aprIt]-output[aprIt])<=1){
             c_pass++;
         } else {
             c_fail++;
@@ -410,7 +414,7 @@ int main(int argc, char **argv) {
     }
 
     if(success){
-        std::cout << "Spatial information Check, PASS" << std::endl;
+        std::cout << "Spatial information Check, PASS: "  << c_pass << std::endl;
     } else {
         std::cout << "Spatial information Check, FAIL Total: " << c_fail << " Pass Total:  " << c_pass << std::endl;
     }
@@ -419,7 +423,7 @@ int main(int argc, char **argv) {
 
 //    MeshData<uint16_t> check_mesh;
 //
-//    apr.interp_img(check_mesh,spatial_info_test3);
+//    apr.interp_img(check_mesh,output_particles);
 //
 //    std::string image_file_name = options.directory +  "conv3_gpu.tif";
 //    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
