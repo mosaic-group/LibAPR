@@ -9,18 +9,30 @@
 neighbour_sum=0;\
 if (not_ghost) {\
     for (int q = 0; q < 3; ++q) {\
-        neighbour_sum += stencil[q*9]*local_patch[z + q - 1][x + 0 - 1][(y+N)%N]\
-                 + stencil[q*9+1]*local_patch[z + q - 1][x + 0 - 1][(y+N-1)%N]\
+neighbour_sum += stencil[q*9]*local_patch[z + q - 1][x + 0 - 1][(y+N-1)%N]\
+                 + stencil[q*9+1]*local_patch[z + q - 1][x + 0 - 1][(y+N)%N]\
                  + stencil[q*9+2]*local_patch[z + q - 1][x + 0 - 1][(y+N+1)%N]\
-                 + stencil[q*9+3]*local_patch[z + q - 1][x + 1 - 1][(y+N)%N]\
-                 + stencil[q*9+4]*local_patch[z + q - 1][x + 1 - 1][(y+N-1)%N]\
+                 + stencil[q*9+3]*local_patch[z + q - 1][x + 1 - 1][(y+N-1)%N]\
+                 + stencil[q*9+4]*local_patch[z + q - 1][x + 1 - 1][(y+N)%N]\
                  + stencil[q*9+5]*local_patch[z + q - 1][x + 1 - 1][(y+N+1)%N]\
-                 + stencil[q*9+6]*local_patch[z + q - 1][x + 2 - 1][(y+N)%N]\
-                 + stencil[q*9+7]*local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]\
+                 + stencil[q*9+6]*local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]\
+                 + stencil[q*9+7]*local_patch[z + q - 1][x + 2 - 1][(y+N)%N]\
                  + stencil[q*9+8]*local_patch[z + q - 1][x + 2 - 1][(y+N+1)%N];\
     }\
     particle_output[index] = std::roundf(neighbour_sum);\
 }\
+
+
+//
+//neighbour_sum += stencil[q*9]*local_patch[z + q - 1][x + 0 - 1][(y+N)%N]\
+//                 + stencil[q*9+1]*local_patch[z + q - 1][x + 0 - 1][(y+N-1)%N]\
+//                 + stencil[q*9+2]*local_patch[z + q - 1][x + 0 - 1][(y+N+1)%N]\
+//                 + stencil[q*9+3]*local_patch[z + q - 1][x + 1 - 1][(y+N)%N]\
+//                 + stencil[q*9+4]*local_patch[z + q - 1][x + 1 - 1][(y+N-1)%N]\
+//                 + stencil[q*9+5]*local_patch[z + q - 1][x + 1 - 1][(y+N+1)%N]\
+//                 + stencil[q*9+6]*local_patch[z + q - 1][x + 2 - 1][(y+N)%N]\
+//                 + stencil[q*9+7]*local_patch[z + q - 1][x + 2 - 1][(y+N-1)%N]\
+//                 + stencil[q*9+8]*local_patch[z + q - 1][x + 2 - 1][(y+N+1)%N];\
 
 #define LOCALPATCHCONV555(particle_output,index,z,x,y,neighbour_sum)\
 neighbour_sum=0;\

@@ -288,7 +288,15 @@ int main(int argc, char **argv) {
     std::vector<float> conv_stencil;
     //conv_stencil.resize(27,1.0f/27.0f);
 
-    conv_stencil.resize(27,.12);
+    conv_stencil.resize(27,0);
+
+    //conv_stencil[25] = 1.0f;
+
+    for (int i = 0; i < conv_stencil.size();++i){
+
+        conv_stencil[i] = (i*1.0f)/(27.0f)*(1/3.8915f);
+    }
+
 
     ExtraParticleData<uint16_t> tree_temp(aprTree);
     tree_temp.init_gpu(aprTree.total_number_parent_cells());
@@ -327,12 +335,6 @@ int main(int argc, char **argv) {
     std::cout << "Average time for loop insert max per million: " << (gpu_iterate_time_si3/(number_reps*1.0f*apr.total_number_particles()))*1000.0*1000000.0f << " ms" << std::endl;
 
 
-
-    timer.start_timer("bundled");
-
-
-    timer.stop_timer();
-
     //////////////////////////
     ///
     /// Now check the data
@@ -355,7 +357,7 @@ int main(int argc, char **argv) {
         //This step is required for all loops to set the iterator by the particle number
         aprIt.set_iterator_to_particle_by_number(particle_number);
         //if(spatial_info_test[aprIt]==(aprIt.x() + aprIt.y() + aprIt.z() + aprIt.level())){
-        if(output_particles[aprIt]==output[aprIt]){
+        if(abs(output_particles[aprIt]-output[aprIt]) < 2){
             c_pass++;
         } else {
 
@@ -381,17 +383,17 @@ int main(int argc, char **argv) {
 
 
 
-//    MeshData<uint16_t> check_mesh;
-//
-//    apr.interp_img(check_mesh,spatial_info_test3);
-//
-//    std::string image_file_name = options.directory +  "conv3_gpu.tif";
-//    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
-//
-//    apr.interp_img(check_mesh,output);
-//
-//    image_file_name = options.directory +  "conv3_gt.tif";
-//    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
+    MeshData<uint16_t> check_mesh;
+
+    apr.interp_img(check_mesh,output_particles);
+
+    std::string image_file_name = options.directory +  "conv3_gpu.tif";
+    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
+
+    apr.interp_img(check_mesh,output);
+
+    image_file_name = options.directory +  "conv3_gt.tif";
+    TiffUtils::saveMeshAsTiff(image_file_name, check_mesh);
 
 
 
