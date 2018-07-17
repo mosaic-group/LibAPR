@@ -111,176 +111,176 @@ int main(int argc, char **argv) {
     //
     //
 
-    ExtraPartCellData<uint16_t> y_b;
-
-    y_b.initialize_structure_parts_empty(apr);
-
-
-    ExtraPartCellData<uint16_t> hint;
-
-    hint.initialize_structure_parts_empty(apr);
-
-
-
-    timer.start_timer("allocate vec");
-
-    std::vector<uint16_t> test;
-
-    test.resize(100000000);
-
-    timer.stop_timer();
-
-
-    timer.start_timer("allocate pixeldata");
-
-
-    PixelData<uint16_t> pixelData;
-    pixelData.init(100000000,1,1);
-
-
-    timer.stop_timer();
-
-
-
-    timer.start_timer("APR serial iterator loop");
-
-
-    for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
-        int z = 0;
-        int x = 0;
-
-        y_b.data[level].resize(apr.apr_access.gap_map.x_num[level]*apr.apr_access.gap_map.z_num[level]);
-        hint.data[level].resize(apr.apr_access.gap_map.x_num[level]*apr.apr_access.gap_map.z_num[level]);
-
-        for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
-            for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
-
-                size_t offset = apr.apr_access.gap_map.x_num[level]*z + x;
-
-                if(level == apr.level_max()){
-                    offset = apr.apr_access.gap_map.x_num[level]*(z/2) + (x/2);
-                }
-
-                if(apr.apr_access.gap_map.data[level][offset].size()>0){
-                    for(auto it = apr.apr_access.gap_map.data[level][offset][0].map.begin(); it != apr.apr_access.gap_map.data[level][offset][0].map.end();++it){
-                        y_b.data[level][offset].push_back(it->first);
-                    }
-
-                }
-            }
-        }
-    }
-
-    timer.stop_timer();
-
-    unsigned int rep = 4;
-
-    timer.start_timer("loop map");
-    for (int k = 0; k < rep; ++k) {
-
-        for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
-            int z = 0;
-            int x = 0;
-#ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator)
-#endif
-            for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
-                for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
-
-                    size_t offset = apr.apr_access.gap_map.x_num[level] * z + x;
-
-                    if (level == apr.level_max()) {
-                        offset = apr.apr_access.gap_map.x_num[level] * (z / 2) + (x / 2);
-                    }
-
-                    size_t max_y = apr.apr_access.y_num[level];
-                    ParticleCell pc;
-
-                    pc.x = x;
-                    pc.z = z;
-                    pc.level = level;
-                    pc.pc_offset = offset;
-
-                    for (int i = 0; i < ceil(0.2 * max_y); ++i) {
-                        pc.y = (uint16_t) (rand() % max_y);
-
-                        //bool found = apr_iterator.set_iterator_by_particle_cell_test(pc);
-                    }
-                }
-            }
-        }
-    }
-
-    timer.stop_timer();
-
-    float t1 = timer.timings.back();
-
-
-    timer.start_timer("loop map");
-    for (int j = 0; j < rep; ++j) {
-        for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
-            int z = 0;
-            int x = 0;
-#ifdef HAVE_OPENMP
-#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator)
-#endif
-            for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
-                for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
-
-                    size_t offset = apr.apr_access.gap_map.x_num[level] * z + x;
-
-                    if (level == apr.level_max()) {
-                        offset = apr.apr_access.gap_map.x_num[level] * (z / 2) + (x / 2);
-                    }
-
-                    size_t max_y = apr.apr_access.y_num[level];
-
-                    auto curr_g = y_b.data[level][offset];
-
-                    for (int i = 0; i < ceil(0.2 * max_y); ++i) {
-                        uint16_t y_val = (uint16_t) (rand() % max_y);
-                        auto it = curr_g.begin();
-                        auto it_end = curr_g.rbegin();
-                        uint16_t counter = 0;
-
-                        if(it!= curr_g.end()) {
-
-                            if ((y_val >= *it) && ((y_val <= *it_end))) {
-
-                                if((y_val-*it) > (*it_end - y_val)) {
-
-                                    while ((it_end != curr_g.rend()) && (*it_end > y_val)) {
-                                        ++it_end;
-                                        counter++;
-                                    }
-                                } else {
-                                    while ((it != curr_g.end()) && (*it < y_val)) {
-                                        ++it;
-                                        counter++;
-                                    }
-
-                                }
-                            }
-                        }
-
-                        //uint16_t found = *it;
-                    }
-                }
-            }
-
-        }
-    }
-
-    timer.stop_timer();
-
-    float t2 = timer.timings.back();
-
-    float normt1 = t1/(1.0f*apr.total_number_particles());
-    float normt2 = t2/(1.0f*apr.total_number_particles());
-
-    std::cout << "Normed time: " << normt1 << std::endl;
-    std::cout << "Normed time2: " << normt2 << std::endl;
-    std::cout << "Ratio: " << t1/t2 << std::endl;
+//    ExtraPartCellData<uint16_t> y_b;
+//
+//    y_b.initialize_structure_parts_empty(apr);
+//
+//
+//    ExtraPartCellData<uint16_t> hint;
+//
+//    hint.initialize_structure_parts_empty(apr);
+//
+//
+//
+//    timer.start_timer("allocate vec");
+//
+//    std::vector<uint16_t> test;
+//
+//    test.resize(100000000);
+//
+//    timer.stop_timer();
+//
+//
+//    timer.start_timer("allocate pixeldata");
+//
+//
+//    PixelData<uint16_t> pixelData;
+//    pixelData.init(100000000,1,1);
+//
+//
+//    timer.stop_timer();
+//
+//
+//
+//    timer.start_timer("APR serial iterator loop");
+//
+//
+//    for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
+//        int z = 0;
+//        int x = 0;
+//
+//        y_b.data[level].resize(apr.apr_access.gap_map.x_num[level]*apr.apr_access.gap_map.z_num[level]);
+//        hint.data[level].resize(apr.apr_access.gap_map.x_num[level]*apr.apr_access.gap_map.z_num[level]);
+//
+//        for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
+//            for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
+//
+//                size_t offset = apr.apr_access.gap_map.x_num[level]*z + x;
+//
+//                if(level == apr.level_max()){
+//                    offset = apr.apr_access.gap_map.x_num[level]*(z/2) + (x/2);
+//                }
+//
+//                if(apr.apr_access.gap_map.data[level][offset].size()>0){
+//                    for(auto it = apr.apr_access.gap_map.data[level][offset][0].map.begin(); it != apr.apr_access.gap_map.data[level][offset][0].map.end();++it){
+//                        y_b.data[level][offset].push_back(it->first);
+//                    }
+//
+//                }
+//            }
+//        }
+//    }
+//
+//    timer.stop_timer();
+//
+//    unsigned int rep = 4;
+//
+//    timer.start_timer("loop map");
+//    for (int k = 0; k < rep; ++k) {
+//
+//        for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
+//            int z = 0;
+//            int x = 0;
+//#ifdef HAVE_OPENMP
+//#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator)
+//#endif
+//            for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
+//                for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
+//
+//                    size_t offset = apr.apr_access.gap_map.x_num[level] * z + x;
+//
+//                    if (level == apr.level_max()) {
+//                        offset = apr.apr_access.gap_map.x_num[level] * (z / 2) + (x / 2);
+//                    }
+//
+//                    size_t max_y = apr.apr_access.y_num[level];
+//                    ParticleCell pc;
+//
+//                    pc.x = x;
+//                    pc.z = z;
+//                    pc.level = level;
+//                    pc.pc_offset = offset;
+//
+//                    for (int i = 0; i < ceil(0.2 * max_y); ++i) {
+//                        pc.y = (uint16_t) (rand() % max_y);
+//
+//                        //bool found = apr_iterator.set_iterator_by_particle_cell_test(pc);
+//                    }
+//                }
+//            }
+//        }
+//    }
+//
+//    timer.stop_timer();
+//
+//    float t1 = timer.timings.back();
+//
+//
+//    timer.start_timer("loop map");
+//    for (int j = 0; j < rep; ++j) {
+//        for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
+//            int z = 0;
+//            int x = 0;
+//#ifdef HAVE_OPENMP
+//#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator)
+//#endif
+//            for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
+//                for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
+//
+//                    size_t offset = apr.apr_access.gap_map.x_num[level] * z + x;
+//
+//                    if (level == apr.level_max()) {
+//                        offset = apr.apr_access.gap_map.x_num[level] * (z / 2) + (x / 2);
+//                    }
+//
+//                    size_t max_y = apr.apr_access.y_num[level];
+//
+//                    auto curr_g = y_b.data[level][offset];
+//
+//                    for (int i = 0; i < ceil(0.2 * max_y); ++i) {
+//                        uint16_t y_val = (uint16_t) (rand() % max_y);
+//                        auto it = curr_g.begin();
+//                        auto it_end = curr_g.rbegin();
+//                        uint16_t counter = 0;
+//
+//                        if(it!= curr_g.end()) {
+//
+//                            if ((y_val >= *it) && ((y_val <= *it_end))) {
+//
+//                                if((y_val-*it) > (*it_end - y_val)) {
+//
+//                                    while ((it_end != curr_g.rend()) && (*it_end > y_val)) {
+//                                        ++it_end;
+//                                        counter++;
+//                                    }
+//                                } else {
+//                                    while ((it != curr_g.end()) && (*it < y_val)) {
+//                                        ++it;
+//                                        counter++;
+//                                    }
+//
+//                                }
+//                            }
+//                        }
+//
+//                        //uint16_t found = *it;
+//                    }
+//                }
+//            }
+//
+//        }
+//    }
+//
+//    timer.stop_timer();
+//
+//    float t2 = timer.timings.back();
+//
+//    float normt1 = t1/(1.0f*apr.total_number_particles());
+//    float normt2 = t2/(1.0f*apr.total_number_particles());
+//
+//    std::cout << "Normed time: " << normt1 << std::endl;
+//    std::cout << "Normed time2: " << normt2 << std::endl;
+//    std::cout << "Ratio: " << t1/t2 << std::endl;
 
 
 

@@ -43,6 +43,41 @@ public:
         }
     }
 
+    void init(uint64_t aTotalNumberOfParticles,DataType aInitVal){
+
+        size_t size = (size_t)aTotalNumberOfParticles;
+
+        if(data.size() != size) {
+            dataMemory.reset(new DataType[size]);
+            DataType *array = dataMemory.get();
+            if (array == nullptr) {
+                std::cerr << "Could not allocate memory!" << size << std::endl;
+                exit(-1);
+            }
+            data.set(array, size);
+
+            // Fill values of new buffer in parallel
+#ifdef HAVE_OPENMP
+#pragma omp parallel
+            {
+                auto threadNum = omp_get_thread_num();
+                auto numOfThreads = omp_get_num_threads();
+                auto chunkSize = size / numOfThreads;
+                auto begin = array + chunkSize * threadNum;
+                auto end = (threadNum == numOfThreads - 1) ? array + size : begin + chunkSize;
+                std::fill(begin, end, aInitVal);
+            }
+#else
+            std::fill(array, array + size, aInitVal);
+#endif
+        }
+
+
+
+    }
+
+
+
     uint64_t size() const { return data.size(); }
 
     uint64_t total_number_particles() const { return data.size(); }

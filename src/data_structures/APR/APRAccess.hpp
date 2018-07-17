@@ -580,7 +580,7 @@ public:
                 gap_map.z_num[i] = z_num[i];
                 gap_map.x_num[i] = x_num[i];
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
-                global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i]);
+                global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],0);
             }
 
         } else {
@@ -588,14 +588,19 @@ public:
                 gap_map.z_num[i] = z_num[i];
                 gap_map.x_num[i] = x_num[i];
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
-                global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i]);
+                global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],0);
             }
 
             gap_map.z_num[level_max()] = z_num[level_max() - 1];
             gap_map.x_num[level_max()] = x_num[level_max() - 1];
             gap_map.data[level_max()].resize(z_num[level_max() - 1] * x_num[level_max() - 1]);
-            global_index_by_level_and_zx_end[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1]);
+            global_index_by_level_and_zx_end[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1],0);
         }
+
+        APRTimer timer(true);
+
+        timer.start_timer("init old");
+
         uint64_t j;
 #ifdef HAVE_OPENMP
 #pragma omp parallel for default(shared) schedule(dynamic) private(j)
@@ -623,6 +628,41 @@ public:
                 global_index += map_data.y_end[i] - map_data.y_begin[i] + 1;
             }
         }
+
+        timer.stop_timer();
+
+        yg_begin.init(map_data.y_begin.size());
+        yg_end.init(map_data.y_begin.size());
+        global_index_begin_offset.init(map_data.y_begin.size());
+
+        std::copy(map_data.y_begin.begin(),map_data.y_begin.end(),yg_begin.data.begin());
+        std::copy(map_data.y_end.begin(),map_data.y_end.end(),yg_end.data.begin());
+
+        //new structures load loop
+        timer.start_timer("init new");
+
+#ifdef HAVE_OPENMP
+#pragma omp parallel for default(shared) schedule(dynamic) private(j)
+#endif
+        for (j = 0; j < total_number_non_empty_rows; ++j) {
+
+            const uint64_t level = map_data.level[j];
+            const uint64_t offset_pc_data =  gap_map.x_num[level]* map_data.z[j] + map_data.x[j];
+            const uint64_t global_begin = cumsum[j];
+            const uint64_t number_gaps = map_data.number_gaps[j];
+
+
+            uint16_t global_index = 0;
+
+            for (uint64_t i = global_begin; i < (global_begin + number_gaps) ; ++i) {
+
+                global_index += yg_end[i] -yg_begin[i] + 1;
+                global_index_begin_offset[i] = global_index;
+            }
+        }
+
+        timer.stop_timer();
+
     }
 
     void rebuild_map_tree(MapStorageData& map_data,APRAccess& ARPOwn_access){

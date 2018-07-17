@@ -622,8 +622,9 @@ public:
     /**
      * Writes only the particle data, requires the same APR to be read in correctly.
      */
+    // #removed const on parts extra input
     template<typename S>
-    float write_particles_only(const std::string &save_loc, const std::string &file_name, const ExtraParticleData<S> &parts_extra) {
+    float write_particles_only(const std::string &save_loc, const std::string &file_name, ExtraParticleData<S> &parts_extra) {
         std::string hdf5_file_name = save_loc + file_name + "_apr_extra_parts.h5";
 
         AprFile f{hdf5_file_name, AprFile::Operation::WRITE};
