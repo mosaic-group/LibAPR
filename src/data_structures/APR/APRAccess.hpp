@@ -41,7 +41,15 @@ public:
     std::vector<std::vector<uint64_t>> global_index_by_level_and_z_begin;
     std::vector<std::vector<uint64_t>> global_index_by_level_and_z_end;
 
-    std::vector<std::vector<uint64_t>> global_index_by_level_and_zx_end;
+
+    // new access data
+    std::vector<ExtraParticleData<uint64_t>> global_index_by_level_and_zx_end;
+    std::vector<ExtraParticleData<uint64_t>> gaps_index_by_level_and_zx_end;
+
+    ExtraParticleData<uint16_t> yg_begin;
+    ExtraParticleData<uint16_t> yg_end;
+    ExtraParticleData<uint16_t> global_index_begin_offset;
+
 
     uint64_t total_number_non_empty_rows;
     ExtraPartCellData<ParticleCellGapMap> gap_map;
@@ -208,7 +216,7 @@ public:
                     if(part_cell.level == level_min()){
                         map_iterator.global_offset = 0;
                     } else {
-                        map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level-1].back();
+                        map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level-1].data.back();
                     }
                 } else {
                     map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level][part_cell.pc_offset-1];
@@ -310,7 +318,7 @@ public:
                         if (part_cell.level == level_min()) {
                             map_iterator.global_offset = 0;
                         } else {
-                            map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level - 1].back();
+                            map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level - 1].data.back();
                         }
                     } else {
                         map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level][
@@ -396,7 +404,7 @@ public:
                         if (part_cell.level == level_min()) {
                             map_iterator.global_offset = 0;
                         } else {
-                            map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level - 1].back();
+                            map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level - 1].data.back();
                         }
                     } else {
                         map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level][
@@ -572,7 +580,7 @@ public:
                 gap_map.z_num[i] = z_num[i];
                 gap_map.x_num[i] = x_num[i];
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
-                global_index_by_level_and_zx_end[i].resize(z_num[i] * x_num[i], 0);
+                global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i]);
             }
 
         } else {
@@ -580,13 +588,13 @@ public:
                 gap_map.z_num[i] = z_num[i];
                 gap_map.x_num[i] = x_num[i];
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
-                global_index_by_level_and_zx_end[i].resize(z_num[i] * x_num[i], 0);
+                global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i]);
             }
 
             gap_map.z_num[level_max()] = z_num[level_max() - 1];
             gap_map.x_num[level_max()] = x_num[level_max() - 1];
             gap_map.data[level_max()].resize(z_num[level_max() - 1] * x_num[level_max() - 1]);
-            global_index_by_level_and_zx_end[level_max()].resize(z_num[level_max() - 1] * x_num[level_max() - 1], 0);
+            global_index_by_level_and_zx_end[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1]);
         }
         uint64_t j;
 #ifdef HAVE_OPENMP
@@ -693,7 +701,7 @@ public:
 
         uint64_t cumsum_l = map_data.global_index.back();
 
-        global_index_by_level_and_zx_end[level_max()].resize(z_num_ * x_num_, 0);
+        global_index_by_level_and_zx_end[level_max()].init(z_num_ * x_num_);
 
         for (z_ = 0; z_ < z_num_; z_++) {
 
@@ -1035,7 +1043,7 @@ inline void APRAccess::initialize_structure_from_particle_cell_tree(APRParameter
         global_index_by_level_and_z_end[i].resize(z_num_, 0);
 
         //new index
-        global_index_by_level_and_zx_end[i].resize(z_num_ * x_num_, 0);
+        global_index_by_level_and_zx_end[i].init(z_num_ * x_num_);
 
         for (size_t z_ = 0; z_ < z_num_; z_++) {
             size_t cumsum_begin_z = cumsum;
@@ -1235,7 +1243,7 @@ inline void APRAccess::initialize_tree_access(APRAccess& APROwn_access, std::vec
         global_index_by_level_and_z_begin[i].resize(z_num_,(-1));
         global_index_by_level_and_z_end[i].resize(z_num_,0);
 
-        global_index_by_level_and_zx_end[i].resize(z_num_ * x_num_, 0);
+        global_index_by_level_and_zx_end[i].init(z_num_ * x_num_);
 
         for (z_ = 0; z_ < z_num_; z_++) {
             uint64_t cumsum_begin_z = cumsum;
@@ -1287,7 +1295,7 @@ inline void APRAccess::initialize_tree_access(APRAccess& APROwn_access, std::vec
 
     //set up the levels here
 
-    global_index_by_level_and_zx_end[level_max()].resize(z_num_ * x_num_, 0);
+    global_index_by_level_and_zx_end[level_max()].init(z_num_ * x_num_);
 
     for (z_ = 0; z_ < z_num_; z_++) {
 

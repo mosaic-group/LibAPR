@@ -114,7 +114,7 @@ public:
 
 
     template<typename U>
-    void decompress(APR<U>& apr,ExtraParticleData<ImageType>& symbols,uint64_t start=0){
+    void decompress(APR<U>& apr,ExtraParticleData<ImageType>& symbols,uint64_t start=0,uint64_t end = 0){
 
         APRTimer timer;
         timer.verbose_flag = false;
@@ -125,12 +125,16 @@ public:
             this->background = apr.parameters.background_intensity_estimate - 2 * apr.parameters.noise_sd_estimate;
         }
 
+        if(end==0){
+            end = symbols.data.size();
+        }
+
        if (compress_type == 1){
             int i = 0;
 #ifdef HAVE_OPENMP
 #pragma omp parallel for schedule(static) private(i)
 #endif
-           for (i = start; i < symbols.data.size(); ++i) {
+           for (i = start; i < end; ++i) {
                //symbols.data[i] = (ImageType) inverse_variance_stabilitzation<float>(inverse_calculate_symbols<float,ImageType>(symbols.data[i]));
                symbols.data[i] = (ImageType) inverse_variance_stabilitzation<float>(symbols.data[i]);
            }

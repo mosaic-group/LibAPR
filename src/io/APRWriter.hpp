@@ -82,10 +82,10 @@ public:
     void read_apr(APR<ImageType>& apr, const std::string &file_name,bool build_tree = false, int max_level_delta = 0) {
 
         APRTimer timer;
-        timer.verbose_flag = false;
+        timer.verbose_flag = true;
 
         APRTimer timer_f;
-        timer_f.verbose_flag = false;
+        timer_f.verbose_flag = true;
 
         AprFile::Operation op;
 
@@ -196,10 +196,15 @@ public:
 
             timer_f.stop_timer();
 
-            timer_f.start_timer("y_b_e");
+            timer_f.start_timer("y_b_e allocate");
             map_data->y_end.resize(apr.apr_access.total_number_gaps);
-            readData(AprTypes::MapYendType, f.objectId, map_data->y_end.data());
             map_data->y_begin.resize(apr.apr_access.total_number_gaps);
+            timer_f.stop_timer();
+
+            timer_f.start_timer("y_b_e");
+
+            readData(AprTypes::MapYendType, f.objectId, map_data->y_end.data());
+
             readData(AprTypes::MapYbeginType, f.objectId, map_data->y_begin.data());
 
             timer_f.stop_timer();
@@ -236,9 +241,7 @@ public:
 
         if(build_tree){
 
-
             if(read_structure) {
-
 
                 timer.start_timer("build tree - map");
 
@@ -269,13 +272,11 @@ public:
 
                 map_data_tree->global_index.resize(apr.apr_tree.tree_access.total_number_non_empty_rows);
 
-
                 std::vector<int16_t> index_delta(apr.apr_tree.tree_access.total_number_non_empty_rows);
                 readData(AprTypes::MapGlobalIndexType, f.objectIdTree, index_delta.data());
                 std::vector<uint64_t> index_delta_big(apr.apr_tree.tree_access.total_number_non_empty_rows);
                 std::copy(index_delta.begin(), index_delta.end(), index_delta_big.begin());
                 std::partial_sum(index_delta_big.begin(), index_delta_big.end(), map_data_tree->global_index.begin());
-
 
                 map_data_tree->y_end.resize(apr.apr_tree.tree_access.total_number_gaps);
                 readData(AprTypes::MapYendType, f.objectIdTree, map_data_tree->y_end.data());
@@ -309,24 +310,27 @@ public:
                 }
             }
 
-            timer.start_timer("tree intensities");
-
+            timer.start_timer("tree intensities allocate");
             uint64_t parts_start = 0;
             if(prev_read_level > 0){
                 parts_start = apr.apr_tree.tree_access.global_index_by_level_end[prev_read_level] + 1;
             }
             uint64_t parts_end = apr.apr_tree.tree_access.global_index_by_level_end[max_read_level_tree] + 1;
 
-            apr.apr_tree.particles_ds_tree.data.resize(parts_end);
+            apr.apr_tree.particles_ds_tree.init(apr.apr_tree.tree_access.total_number_particles);
+
+            timer.stop_timer();
+
+            timer.start_timer("tree intensities");
 
             if ( apr.apr_tree.particles_ds_tree.data.size() > 0) {
-                readData(AprTypes::ParticleIntensitiesType, f.objectIdTree, apr.apr_tree.particles_ds_tree.data.data() + parts_start,parts_start,parts_end);
+                readData(AprTypes::ParticleIntensitiesType, f.objectIdTree, apr.apr_tree.particles_ds_tree.data.begin() + parts_start,parts_start,parts_end);
             }
 
             APRCompress<ImageType> apr_compress;
             apr_compress.set_compression_type(1);
             apr_compress.set_quantization_factor(2);
-            apr_compress.decompress(apr, apr.apr_tree.particles_ds_tree,parts_start);
+            apr_compress.decompress(apr, apr.apr_tree.particles_ds_tree,parts_start,parts_end);
 
             timer.stop_timer();
 
@@ -352,11 +356,16 @@ public:
 
         //apr.apr_access.level_max = max_read_level;
 
+        timer.start_timer("Read intensities allocate");
+        apr.particles_intensities.init(apr.total_number_particles());
+        timer.stop_timer();
+
         timer.start_timer("Read intensities");
         // ------------- read data ------------------------------
-        apr.particles_intensities.data.resize(parts_end);
+
         if (apr.particles_intensities.data.size() > 0) {
-            readData(AprTypes::ParticleIntensitiesType, f.objectId, apr.particles_intensities.data.data() + parts_start,parts_start,parts_end);
+            readData(AprTypes::ParticleIntensitiesType, f.objectId, apr.particles_intensities.data.begin() + parts_start,parts_start,parts_end);
+            //readData(AprTypes::ParticleIntensitiesType, f.objectId, apr.particles_intensities.data.data());
         }
 
 
@@ -371,7 +380,7 @@ public:
             APRCompress<ImageType> apr_compress;
             apr_compress.set_compression_type(compress_type);
             apr_compress.set_quantization_factor(quantization_factor);
-            apr_compress.decompress(apr, apr.particles_intensities,parts_start);
+            apr_compress.decompress(apr, apr.particles_intensities,parts_start,parts_end);
         }
         timer.stop_timer();
     }
@@ -650,7 +659,7 @@ public:
         readAttr(AprTypes::TotalNumberOfParticlesType, f.groupId, &numberOfParticles);
 
         // ------------- read data -----------------------------
-        extra_parts.data.resize(numberOfParticles);
+        extra_parts.init(numberOfParticles);
         readData(AprTypes::ExtraParticleDataType, f.objectId, extra_parts.data.data());
     }
 
@@ -800,7 +809,7 @@ private:
 
 
     template<typename T>
-    void writeData(const AprType &aType, hid_t aObjectId, T aContainer, unsigned int blosc_comp_type, unsigned int blosc_comp_level,unsigned int blosc_shuffle) {
+    void writeData(const AprType &aType, hid_t aObjectId, T& aContainer, unsigned int blosc_comp_type, unsigned int blosc_comp_level,unsigned int blosc_shuffle) {
         hsize_t dims[] = {aContainer.size()};
         const hsize_t rank = 1;
         hdf5_write_data_blosc(aObjectId, aType.hdf5type, aType.typeName, rank, dims, aContainer.data(), blosc_comp_type, blosc_comp_level, blosc_shuffle);

@@ -20,7 +20,7 @@ public:
 
         std::vector<float> init_val = {0,0,0};
 
-        gradient.data.resize(apr.total_number_particles(),init_val);
+        gradient.init(apr.total_number_particles());
 
         auto apr_iterator = apr.iterator();
         auto neighbour_iterator = apr.iterator();

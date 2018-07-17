@@ -58,7 +58,7 @@ uint64_t APRIterator::start_index(const uint16_t level, const uint64_t offset){
         if(level == this->level_min()){
             return  0;
         } else {
-            return this->apr_access->global_index_by_level_and_zx_end[this->current_particle_cell.level-1].back();
+            return this->apr_access->global_index_by_level_and_zx_end[this->current_particle_cell.level-1].data.back();
         }
     } else {
         return this->apr_access->global_index_by_level_and_zx_end[this->current_particle_cell.level][this->current_particle_cell.pc_offset-1];

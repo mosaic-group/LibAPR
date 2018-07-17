@@ -170,7 +170,7 @@ public:
         //initialization of the iteration structures
          //this is required for parallel access
         auto apr_iterator = iterator();
-        parts.data.resize(apr_iterator.total_number_particles());
+        parts.init(apr_iterator.total_number_particles());
 
         std::cout << "Total number of particles: " << apr_iterator.total_number_particles() << std::endl;
 

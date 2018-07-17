@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <vector>
+#include "data_structures/Mesh/PixelData.hpp"
 
 template<typename V> class APR;
 class APRIterator;
@@ -19,12 +20,30 @@ class ExtraParticleData {
     static const uint64_t parallel_particle_number_threshold = 5000000l;
 
 public:
-    std::vector<DataType> data;
+    //std::vector<DataType> data;
+
+    std::unique_ptr<DataType[]> dataMemory;
+    ArrayWrapper<DataType> data;
 
     ExtraParticleData() {};
     ExtraParticleData(uint64_t aTotalNumberOfParticles) { init(aTotalNumberOfParticles); }
 
-    void init(uint64_t aTotalNumberOfParticles){ data.resize(aTotalNumberOfParticles); }
+    void init(uint64_t aTotalNumberOfParticles){
+
+        size_t size = (size_t)aTotalNumberOfParticles;
+
+        if(data.size() != size) {
+            dataMemory.reset(new DataType[size]);
+            DataType *array = dataMemory.get();
+            if (array == nullptr) {
+                std::cerr << "Could not allocate memory!" << size << std::endl;
+                exit(-1);
+            }
+            data.set(array, size);
+        }
+    }
+
+    uint64_t size() const { return data.size(); }
 
     uint64_t total_number_particles() const { return data.size(); }
     DataType& operator[](uint64_t aGlobalIndex) { return data[aGlobalIndex]; }
@@ -53,7 +72,7 @@ inline void ExtraParticleData<DataType>::copy_parts(APR<T> &apr, const ExtraPart
     const uint64_t total_number_of_particles = particlesToCopy.data.size();
 
     //checking if its the right size, if it is, this should do nothing.
-    data.resize(total_number_of_particles);
+    init(total_number_of_particles);
 
     APRIterator apr_iterator(apr.apr_access);
 
@@ -141,7 +160,7 @@ inline void ExtraParticleData<DataType>::zip_inplace(APR<T> &apr, const ExtraPar
  */
 template<typename DataType> template<typename V,class BinaryOperation,typename T>
 inline void ExtraParticleData<DataType>::zip(APR<T>& apr, const ExtraParticleData<V> &parts2, ExtraParticleData<V>& output, BinaryOperation op, uint64_t level, unsigned int aNumberOfBlocks) {
-    output.data.resize(data.size());
+    output.init(data.size());
 
     APRIterator apr_iterator(apr.apr_access);
 
@@ -228,7 +247,7 @@ inline void ExtraParticleData<DataType>::map_inplace(APR<T>& apr,UnaryOperator o
  */
 template<typename DataType> template <typename T,typename U,class UnaryOperator>
 inline void ExtraParticleData<DataType>::map(APR<T>& apr,ExtraParticleData<U>& output,UnaryOperator op,const uint64_t level,unsigned int aNumberOfBlocks) {
-    output.data.resize(data.size());
+    output.init(data.size());
 
     APRIterator apr_iterator(apr.apr_access);
 

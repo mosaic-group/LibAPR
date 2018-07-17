@@ -31,7 +31,9 @@ void hdf5_load_data_blosc(hid_t obj_id, hid_t dataType, void* buff, const char* 
  * reads data from hdf5 (data type auto-detection)
  */
 void hdf5_load_data_blosc(hid_t obj_id, void* buff, const char* data_name) {
+
     hid_t data_id =  H5Dopen2(obj_id, data_name ,H5P_DEFAULT);
+
     hid_t dataType = H5Dget_type(data_id);
     H5Dread(data_id, dataType, H5S_ALL, H5S_ALL, H5P_DEFAULT, buff);
     H5Tclose(dataType);
@@ -47,6 +49,10 @@ void hdf5_load_data_blosc_partial(hid_t obj_id, void* buff, const char* data_nam
 
     hid_t memspace_id=0;
     hid_t dataspace_id=0;
+
+//    hid_t plist = H5Dget_access_plist( data_id );
+//
+//    H5Pset_chunk_cache(plist,0,0,0);
 
     hid_t dataType = H5Dget_type(data_id);
 
@@ -81,7 +87,7 @@ void hdf5_write_data_blosc(hid_t obj_id, hid_t type_id, const char *ds_name, hsi
     hid_t plist_id  = H5Pcreate(H5P_DATASET_CREATE);
 
     // Dataset must be chunked for compression
-    const uint64_t max_size = 100000;
+    const uint64_t max_size = 100000; //changing
     hsize_t cdims = (dims[0] < max_size) ? dims[0] : max_size;
     rank = 1;
     H5Pset_chunk(plist_id, rank, &cdims);
