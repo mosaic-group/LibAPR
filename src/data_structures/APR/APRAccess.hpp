@@ -574,6 +574,8 @@ public:
 
         global_index_by_level_and_zx_end.resize(gap_map.depth_max+1);
 
+        gaps_index_by_level_and_zx_end.resize(level_max()+1);
+
 
         if(tree) {
             for (uint64_t i = gap_map.depth_min; i < gap_map.depth_max; i++) {
@@ -581,6 +583,7 @@ public:
                 gap_map.x_num[i] = x_num[i];
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
                 global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],0);
+                gaps_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],UINT64_MAX);
             }
 
         } else {
@@ -589,12 +592,14 @@ public:
                 gap_map.x_num[i] = x_num[i];
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
                 global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],0);
+                gaps_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],UINT64_MAX);
             }
 
             gap_map.z_num[level_max()] = z_num[level_max() - 1];
             gap_map.x_num[level_max()] = x_num[level_max() - 1];
             gap_map.data[level_max()].resize(z_num[level_max() - 1] * x_num[level_max() - 1]);
             global_index_by_level_and_zx_end[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1],0);
+            gaps_index_by_level_and_zx_end[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1],UINT64_MAX);
         }
 
         APRTimer timer(true);
@@ -651,6 +656,7 @@ public:
             const uint64_t global_begin = cumsum[j];
             const uint64_t number_gaps = map_data.number_gaps[j];
 
+            gaps_index_by_level_and_zx_end[level][offset_pc_data] = cumsum[j];
 
             uint16_t global_index = 0;
 

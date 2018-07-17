@@ -24,6 +24,7 @@ struct MapIterator{
     uint16_t level;
     uint16_t max_offset;
     uint64_t global_offset;
+    uint64_t gap_index;
 };
 
 struct LocalMapIterators{

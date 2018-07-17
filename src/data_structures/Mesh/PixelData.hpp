@@ -47,7 +47,7 @@ public:
     inline const T* begin() const { return (iArray); }
     inline const T* end() const { return (iArray + iNumOfElements); }
 
-    inline T back() {return iArray[iNumOfElements];}
+    inline T back() {return iArray[iNumOfElements-1];}
 
     inline T& operator[](size_t idx) { return iArray[idx]; }
     inline const T& operator[](size_t idx) const { return iArray[idx]; }

@@ -24,7 +24,7 @@ random access strategies on the APR.
 
 #include "Example_random_access.hpp"
 
-
+#include "data_structures/APR/APRIterator_.hpp"
 
 int main(int argc, char **argv) {
 
@@ -53,7 +53,97 @@ int main(int argc, char **argv) {
     //remove the file extension
     name.erase(name.end() - 3, name.end());
 
-    auto apr_iterator = apr.iterator();
+    APRIterator_ apr_iterator(apr.apr_access);
+
+    //Create particle datasets, once intiailized this has the same layout as the Particle Cells
+    ExtraParticleData<float> calc_ex(apr.total_number_particles());
+
+    APRIterator apr_iterator_old(apr.apr_access);
+
+    //Create particle datasets, once intiailized this has the same layout as the Particle Cells
+
+    for (unsigned int level = apr_iterator_old.level_min(); level <= apr_iterator_old.level_max(); ++level) {
+        int z = 0;
+        int x = 0;
+
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator_old)
+#endif
+        for (z = 0; z < apr_iterator_old.spatial_index_z_max(level); z++) {
+            for (x = 0; x < apr_iterator_old.spatial_index_x_max(level); ++x) {
+                for (apr_iterator_old.set_new_lzx(level, z, x); apr_iterator_old.global_index() < apr_iterator_old.end_index;
+                     apr_iterator_old.set_iterator_to_particle_next_particle()) {
+
+                    //you can then also use it to access any particle properties stored as ExtraParticleData
+                    calc_ex[apr_iterator_old] = 10.0f * apr.particles_intensities[apr_iterator_old];
+                }
+            }
+        }
+
+    }
+
+    int rep = 20;gi
+
+    timer.start_timer("APR serial iterator loop old");
+
+    for (int i = 0; i < rep; ++i) {
+
+
+        for (unsigned int level = apr_iterator_old.level_min(); level <= apr_iterator_old.level_max(); ++level) {
+            int z = 0;
+            int x = 0;
+
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator_old)
+#endif
+            for (z = 0; z < apr_iterator_old.spatial_index_z_max(level); z++) {
+                for (x = 0; x < apr_iterator_old.spatial_index_x_max(level); ++x) {
+                    for (apr_iterator_old.set_new_lzx(level, z, x);
+                         apr_iterator_old.global_index() < apr_iterator_old.end_index;
+                         apr_iterator_old.set_iterator_to_particle_next_particle()) {
+
+                        //you can then also use it to access any particle properties stored as ExtraParticleData
+                        calc_ex[apr_iterator_old] = 10.0f * apr.particles_intensities[apr_iterator_old];
+                    }
+                }
+            }
+
+        }
+    }
+
+
+    timer.stop_timer();
+
+
+    timer.start_timer("APR serial iterator loop");
+
+    for (int i = 0; i < rep; ++i) {
+
+        for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
+            int z = 0;
+            int x = 0;
+
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator)
+#endif
+            for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
+                for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
+                    for (apr_iterator.set_new_lzx(level, z, x); apr_iterator.global_index() < apr_iterator.end_index;
+                         apr_iterator.set_iterator_to_particle_next_particle()) {
+
+                        //you can then also use it to access any particle properties stored as ExtraParticleData
+                        calc_ex[apr_iterator] = 10.0f * apr.particles_intensities[apr_iterator];
+                    }
+                }
+            }
+
+        }
+    }
+
+    timer.stop_timer();
+
+
+
 
     ///////////////////////
     ///
