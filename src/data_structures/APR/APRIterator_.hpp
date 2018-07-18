@@ -87,11 +87,9 @@ inline uint64_t APRIterator_::set_new_lzx(const uint16_t level,const uint16_t z,
     if(level == this->level_max()){
         this->current_particle_cell.pc_offset =this->apr_access->x_num[level-1]*(z/2) + (x/2);
 
-        this->current_gap.gap_index =  this->apr_access->gaps_index_by_level_and_zx_end[this->current_particle_cell.level][this->current_particle_cell.pc_offset];
+        this->current_gap.gap_index =  this->apr_access->gaps_index_by_level_and_zx_begin[this->current_particle_cell.level][this->current_particle_cell.pc_offset];
 
         if(this->current_gap.gap_index != UINT64_MAX) {
-
-            //this->current_gap.iterator =this->apr_access->gap_map.data[this->current_particle_cell.level][this->current_particle_cell.pc_offset][0].map.begin();
 
             this->current_particle_cell.y = this->apr_access->yg_begin[this->current_gap.gap_index];
 
@@ -101,23 +99,11 @@ inline uint64_t APRIterator_::set_new_lzx(const uint16_t level,const uint16_t z,
 
             this->set_neighbour_flag();
 
-            //requries now an offset depending on the child position odd/even
-            auto it =(this->apr_access->gap_map.data[level][this->current_particle_cell.pc_offset][0].map.rbegin());
 
-            uint16_t num_parts;
+            uint64_t gap_end = this->apr_access->gaps_index_by_level_and_zx_end[this->current_particle_cell.level][this->current_particle_cell.pc_offset]-1;
 
-            if(this->check_neigh_flag){
+            uint64_t num_parts = (uint64_t) (this->apr_access->global_index_begin_offset[gap_end] + (this->apr_access->yg_end[gap_end] - this->apr_access->yg_begin[gap_end]) + 1);
 
-                unsigned int x_m = std::min((unsigned int)((x/2)*2 + 1),(unsigned int) (this->apr_access->x_num[level]-1));
-                unsigned int z_m = std::min((unsigned int)((z/2)*2 + 1),(unsigned int) (this->apr_access->z_num[level]-1));
-
-                unsigned int num_rows = ((x_m%2) + (z_m%2)*2);
-
-                num_parts = (uint16_t)((this->apr_access->global_index_by_level_and_zx_end[this->current_particle_cell.level][this->current_particle_cell.pc_offset]-begin)/num_rows);
-
-            } else {
-                num_parts = (uint16_t)((this->apr_access->global_index_by_level_and_zx_end[this->current_particle_cell.level][this->current_particle_cell.pc_offset]-begin)/4);
-            }
 
             this->end_index =  begin + num_parts;
 
@@ -135,7 +121,7 @@ inline uint64_t APRIterator_::set_new_lzx(const uint16_t level,const uint16_t z,
     } else {
         this->current_particle_cell.pc_offset =this->apr_access->x_num[level]*z + x;
 
-        this->current_gap.gap_index =  this->apr_access->gaps_index_by_level_and_zx_end[this->current_particle_cell.level][this->current_particle_cell.pc_offset];
+        this->current_gap.gap_index =  this->apr_access->gaps_index_by_level_and_zx_begin[this->current_particle_cell.level][this->current_particle_cell.pc_offset];
 
         if(this->current_gap.gap_index != UINT64_MAX) {
 
@@ -261,7 +247,7 @@ inline bool APRIterator_::find_neighbours_in_direction(const uint8_t& direction)
         this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,_LEVEL_SAME,0);
 
         if(this->check_neighbours_particle_cell_in_bounds()){
-            if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->local_iterators.same_level[direction])){
+            if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->local_iterators.same_level[direction])){
                 //found the neighbour! :D
                 this->level_delta = _LEVEL_SAME;
                 return true;
@@ -271,7 +257,7 @@ inline bool APRIterator_::find_neighbours_in_direction(const uint8_t& direction)
         this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,_LEVEL_DECREASE,0);
 
         if(this->check_neighbours_particle_cell_in_bounds()){
-            if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->local_iterators.parent_level[direction])){
+            if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->local_iterators.parent_level[direction])){
                 this->level_delta = _LEVEL_DECREASE;
 
                 return true;
@@ -287,7 +273,7 @@ inline bool APRIterator_::find_neighbours_in_direction(const uint8_t& direction)
         this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,_LEVEL_SAME,0);
 
         if(this->check_neighbours_particle_cell_in_bounds()){
-            if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->local_iterators.same_level[direction])){
+            if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->local_iterators.same_level[direction])){
                 //found the neighbour! :D
                 this->level_delta = _LEVEL_SAME;
                 return true;
@@ -297,7 +283,7 @@ inline bool APRIterator_::find_neighbours_in_direction(const uint8_t& direction)
         this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,_LEVEL_INCREASE,0);
 
         if(this->check_neighbours_particle_cell_in_bounds()){
-            if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->local_iterators.child_level[direction][0])){
+            if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->local_iterators.child_level[direction][0])){
                 this->level_delta = _LEVEL_INCREASE;
                 return true;
             }
@@ -309,7 +295,7 @@ inline bool APRIterator_::find_neighbours_in_direction(const uint8_t& direction)
         this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,_LEVEL_SAME,0);
 
         if(this->check_neighbours_particle_cell_in_bounds()){
-            if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->local_iterators.same_level[direction])){
+            if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->local_iterators.same_level[direction])){
                 //found the neighbour! :D
                 this->level_delta = _LEVEL_SAME;
                 return true;
@@ -319,7 +305,7 @@ inline bool APRIterator_::find_neighbours_in_direction(const uint8_t& direction)
         this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,_LEVEL_DECREASE,0);
 
         if(this->check_neighbours_particle_cell_in_bounds()){
-            if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->local_iterators.parent_level[direction])){
+            if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->local_iterators.parent_level[direction])){
                 this->level_delta = _LEVEL_DECREASE;
                 return true;
             }
@@ -327,7 +313,7 @@ inline bool APRIterator_::find_neighbours_in_direction(const uint8_t& direction)
         this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,_LEVEL_INCREASE,0);
 
         if(this->check_neighbours_particle_cell_in_bounds()){
-            if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->local_iterators.child_level[direction][0])){
+            if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->local_iterators.child_level[direction][0])){
                 this->level_delta = _LEVEL_INCREASE;
                 return true;
             }
@@ -446,7 +432,7 @@ inline bool APRIterator_::find_next_child(const uint8_t& direction,const uint8_t
     this->apr_access->get_neighbour_coordinate(this->current_particle_cell,this->neighbour_particle_cell,direction,this->level_delta,index);
 
     if(this->check_neighbours_particle_cell_in_bounds()){
-        if(this->apr_access->find_particle_cell(this->neighbour_particle_cell,this->apr_access->get_local_iterator(this->local_iterators, this->level_delta, direction,index))){
+        if(this->apr_access->find_particle_cell_(this->neighbour_particle_cell,this->apr_access->get_local_iterator(this->local_iterators, this->level_delta, direction,index))){
             //found the neighbour! :D
             return true;
         }

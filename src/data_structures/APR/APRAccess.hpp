@@ -44,11 +44,14 @@ public:
 
     // new access data
     std::vector<ExtraParticleData<uint64_t>> global_index_by_level_and_zx_end;
+    std::vector<ExtraParticleData<uint64_t>> gaps_index_by_level_and_zx_begin;
     std::vector<ExtraParticleData<uint64_t>> gaps_index_by_level_and_zx_end;
 
     ExtraParticleData<uint16_t> yg_begin;
     ExtraParticleData<uint16_t> yg_end;
     ExtraParticleData<uint16_t> global_index_begin_offset;
+
+    ExtraParticleData<gap> gaps;
 
 
     uint64_t total_number_non_empty_rows;
@@ -254,7 +257,7 @@ public:
             if ((part_cell.y >= map_iterator.iterator->first) && (part_cell.y <= map_iterator.iterator->second.y_end)) {
                 // already pointing to the correct place
                 part_cell.global_index = map_iterator.iterator->second.global_index_begin_offset +
-                                         (part_cell.y - map_iterator.iterator->first) + offset; //#fixme
+                                         (part_cell.y - map_iterator.iterator->first) + offset;
 
                 return true;
             } else {
@@ -267,7 +270,7 @@ public:
                         (part_cell.y <= map_iterator.iterator->second.y_end)) {
                         // already pointing to the correct place
                         part_cell.global_index = map_iterator.iterator->second.global_index_begin_offset +
-                                                 (part_cell.y - map_iterator.iterator->first) + offset; //#fixme
+                                                 (part_cell.y - map_iterator.iterator->first) + offset;
 
                         return true;
                     }
@@ -280,6 +283,7 @@ public:
 
                 if((map_iterator.iterator == current_pc_map.map.begin()) || (map_iterator.iterator == current_pc_map.map.end())){
                     //less then the first value
+
                     return false;
                 } else{
                     map_iterator.iterator--;
@@ -288,14 +292,161 @@ public:
                 if ((part_cell.y >= map_iterator.iterator->first) & (part_cell.y <= map_iterator.iterator->second.y_end)) {
                     // already pointing to the correct place
                     part_cell.global_index = map_iterator.iterator->second.global_index_begin_offset +
-                                             (part_cell.y - map_iterator.iterator->first) + offset; //#fixme
-
+                                             (part_cell.y - map_iterator.iterator->first) + offset;
                     return true;
                 }
             }
         }
 
         return false;
+    }
+
+
+    bool search_y(ParticleCell& part_cell,MapIterator& map_iterator,uint64_t offset){
+        //
+        //  BC 2018
+        //
+        //  Linear search strategy of neighbours using the sparse y gaps
+        //
+
+        //
+        // Check dealing with the case where its pointing to the correct gap
+        // Also deal with searching to next and then behind from current index! (Still hope!)
+        //
+        uint64_t idx = map_iterator.gap_index;
+        auto y = part_cell.y;
+
+        //return true;
+
+        //first is it in bounds
+        if ((y >= map_iterator.y_gb) && ((y <= map_iterator.y_ge))) {
+
+            //is iterator currently set to a valid gap
+            if((idx >= map_iterator.index_b) && (idx < map_iterator.index_e)){
+
+
+                //check if already pointing to correct location
+                if((y >= yg_begin[idx]) && (y <= yg_end[idx])) {
+                    part_cell.global_index = (y - yg_begin[idx]) + global_index_begin_offset[idx] + offset;
+                    return true;
+                }
+                //try next
+                if((idx+1)<map_iterator.index_e){
+                    idx++;
+                    if((y >= yg_begin[idx]) && (y <= yg_end[idx])) {
+                        part_cell.global_index = (y - yg_begin[idx]) + global_index_begin_offset[idx] + offset;
+                        return true;
+                    }
+                }
+            } else {
+
+
+                idx = map_iterator.index_b;
+            }
+
+            //return true;
+            if((map_iterator.y_ge-map_iterator.y_gb) > 0) {
+                idx = map_iterator.index_b + ((y - map_iterator.y_gb) * (map_iterator.index_e - map_iterator.index_b)) / (map_iterator.y_ge-map_iterator.y_gb);
+            } else {
+                idx = map_iterator.index_b;
+            }
+            //idx = map_iterator.index_b;
+            //determine direction of iteration
+            if(yg_begin[idx] > y) {
+                //iterate down
+                while ((idx > map_iterator.index_b) && (yg_begin[idx] > y)) {
+                    idx--;
+                }
+            } else {
+                //iterate up
+                while ((idx < (map_iterator.index_e-1)) && (yg_begin[idx] < y)) {
+                    idx++;
+                }
+            }
+
+
+           // return true;
+
+            if((y >= yg_begin[idx]) && (y <= yg_end[idx])){
+
+                part_cell.global_index = (y  - yg_begin[idx]) + global_index_begin_offset[idx] + offset;
+                map_iterator.gap_index = idx;
+                return true;
+
+            } else {
+                //return true; //#TODO
+                return false;
+            }
+
+        } else {
+           // return true; //#TODO
+            return false;
+        }
+
+    }
+
+
+    bool find_particle_cell_(ParticleCell& part_cell,MapIterator& map_iterator){
+
+
+        map_iterator.index_b =  gaps_index_by_level_and_zx_begin[part_cell.level][part_cell.pc_offset];
+
+        if(map_iterator.index_b!=UINT64_MAX) {
+            //ParticleCellGapMap& current_pc_map = gap_map.data[part_cell.level][part_cell.pc_offset][0];
+
+            //this is required due to utilization of the equivalence optimization
+
+            if((map_iterator.pc_offset != part_cell.pc_offset) || (map_iterator.level != part_cell.level) ){
+                //map_iterator.iterator = gap_map.data[part_cell.level][part_cell.pc_offset][0].map.begin();
+                map_iterator.pc_offset = part_cell.pc_offset;
+                map_iterator.level = part_cell.level;
+
+                map_iterator.index_e =  gaps_index_by_level_and_zx_end[part_cell.level][part_cell.pc_offset];
+
+                if(part_cell.pc_offset == 0){
+                    if(part_cell.level == level_min()){
+                        map_iterator.global_offset = 0;
+                    } else {
+                        map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level-1].data.back();
+                    }
+                } else {
+                    map_iterator.global_offset = global_index_by_level_and_zx_end[part_cell.level][part_cell.pc_offset-1];
+                }
+
+                if(part_cell.level == level_max()) {
+
+                    map_iterator.max_offset = (uint16_t) (global_index_begin_offset[ map_iterator.index_e-1] + (yg_end[ map_iterator.index_e-1] - yg_begin[ map_iterator.index_e-1]) + 1);
+
+                } else {
+                    map_iterator.max_offset = 0;
+                }
+
+                map_iterator.y_gb = yg_begin[map_iterator.index_b];
+                map_iterator.y_ge = yg_end[map_iterator.index_e-1];
+
+                map_iterator.y_cb = map_iterator.y_gb;
+                map_iterator.y_ce = yg_end[map_iterator.index_b];
+
+
+            }
+
+            uint64_t offset = 0;
+            //deals with the different xz in the same access tree at highest resolution
+            if(part_cell.level == level_max()) {
+                offset = ((part_cell.x % 2) + (part_cell.z % 2) * 2)*map_iterator.max_offset +
+                         map_iterator.global_offset;
+            } else {
+                offset = map_iterator.global_offset;
+            }
+
+
+
+            return search_y(part_cell,map_iterator,offset);
+
+        } else {
+
+            return false;
+        }
     }
 
     bool find_particle_cell_tree(APRAccess &apr_access,ParticleCell& part_cell,MapIterator& map_iterator){
@@ -575,6 +726,7 @@ public:
         global_index_by_level_and_zx_end.resize(gap_map.depth_max+1);
 
         gaps_index_by_level_and_zx_end.resize(level_max()+1);
+        gaps_index_by_level_and_zx_begin.resize(level_max()+1);
 
 
         if(tree) {
@@ -584,6 +736,7 @@ public:
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
                 global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],0);
                 gaps_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],UINT64_MAX);
+                gaps_index_by_level_and_zx_begin[i].init(z_num[i] * x_num[i],UINT64_MAX);
             }
 
         } else {
@@ -593,6 +746,7 @@ public:
                 gap_map.data[i].resize(z_num[i] * x_num[i]);
                 global_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],0);
                 gaps_index_by_level_and_zx_end[i].init(z_num[i] * x_num[i],UINT64_MAX);
+                gaps_index_by_level_and_zx_begin[i].init(z_num[i] * x_num[i],UINT64_MAX);
             }
 
             gap_map.z_num[level_max()] = z_num[level_max() - 1];
@@ -600,6 +754,7 @@ public:
             gap_map.data[level_max()].resize(z_num[level_max() - 1] * x_num[level_max() - 1]);
             global_index_by_level_and_zx_end[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1],0);
             gaps_index_by_level_and_zx_end[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1],UINT64_MAX);
+            gaps_index_by_level_and_zx_begin[level_max()].init(z_num[level_max() - 1] * x_num[level_max() - 1],UINT64_MAX);
         }
 
         APRTimer timer(true);
@@ -656,14 +811,15 @@ public:
             const uint64_t global_begin = cumsum[j];
             const uint64_t number_gaps = map_data.number_gaps[j];
 
-            gaps_index_by_level_and_zx_end[level][offset_pc_data] = cumsum[j];
+            gaps_index_by_level_and_zx_begin[level][offset_pc_data] = cumsum[j];
+            gaps_index_by_level_and_zx_end[level][offset_pc_data] = cumsum[j] + number_gaps;
 
             uint16_t global_index = 0;
 
             for (uint64_t i = global_begin; i < (global_begin + number_gaps) ; ++i) {
-
-                global_index += yg_end[i] -yg_begin[i] + 1;
                 global_index_begin_offset[i] = global_index;
+                global_index += yg_end[i] - yg_begin[i] + 1;
+
             }
         }
 

@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 
     }
 
-    int rep = 20;gi
+    int rep = 2;
 
     timer.start_timer("APR serial iterator loop old");
 
@@ -143,6 +143,114 @@ int main(int argc, char **argv) {
     timer.stop_timer();
 
 
+    ExtraParticleData<uint16_t> neigh_avg(apr.total_number_particles());
+
+    timer.start_timer("APR serial iterator neighbours loop old");
+
+    APRIterator neighbour_iterator_old(apr.apr_access);
+
+    for (int j = 0; j < rep; ++j) {
+
+        for (unsigned int level = apr_iterator_old.level_min(); level <= apr_iterator_old.level_max(); ++level) {
+            int z = 0;
+            int x = 0;
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator_old, neighbour_iterator_old)
+#endif
+            for (z = 0; z < apr_iterator_old.spatial_index_z_max(level); z++) {
+                for (x = 0; x < apr_iterator_old.spatial_index_x_max(level); ++x) {
+                    for (apr_iterator_old.set_new_lzx(level, z, x);
+                         apr_iterator_old.global_index() < apr_iterator_old.end_index;
+                         apr_iterator_old.set_iterator_to_particle_next_particle()) {
+
+                        //now we only update the neighbours, and directly access them through a neighbour iterator
+
+                        float counter = 0;
+                        float temp = 0;
+
+                        //loop over all the neighbours and set the neighbour iterator to it
+                        for (int direction = 0; direction < 6; ++direction) {
+                            // Neighbour Particle Cell Face definitions [+y,-y,+x,-x,+z,-z] =  [0,1,2,3,4,5]
+                            apr_iterator_old.find_neighbours_in_direction(direction);
+
+                            for (int index = 0;
+                                 index < apr_iterator_old.number_neighbours_in_direction(direction); ++index) {
+                                // on each face, there can be 0-4 neighbours accessed by index
+                                if (neighbour_iterator_old.set_neighbour_iterator(neighbour_iterator_old, direction,
+                                                                                  index)) {
+                                    //will return true if there is a neighbour defined
+
+                                    //temp += apr.particles_intensities[neighbour_iterator_old];
+                                    counter+=neighbour_iterator_old;
+
+                                }
+                            }
+                        }
+
+                        neigh_avg[apr_iterator_old] = temp / counter;
+
+
+                    }
+                }
+            }
+        }
+    }
+
+    timer.stop_timer();
+
+
+    APRIterator_ neighbour_iterator(apr.apr_access);
+
+    timer.start_timer("APR serial iterator neighbours loop");
+
+    for (int j = 0; j < rep; ++j) {
+
+        for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
+            int z = 0;
+            int x = 0;
+#ifdef HAVE_OPENMP
+#pragma omp parallel for schedule(dynamic) private(z, x) firstprivate(apr_iterator, neighbour_iterator)
+#endif
+            for (z = 0; z < apr_iterator.spatial_index_z_max(level); z++) {
+                for (x = 0; x < apr_iterator.spatial_index_x_max(level); ++x) {
+                    for (apr_iterator.set_new_lzx(level, z, x); apr_iterator.global_index() < apr_iterator.end_index;
+                         apr_iterator.set_iterator_to_particle_next_particle()) {
+
+                        //now we only update the neighbours, and directly access them through a neighbour iterator
+
+                        float counter = 0;
+                        float temp = 0;
+
+                        //loop over all the neighbours and set the neighbour iterator to it
+                        for (int direction = 0; direction < 6; ++direction) {
+                            // Neighbour Particle Cell Face definitions [+y,-y,+x,-x,+z,-z] =  [0,1,2,3,4,5]
+                            apr_iterator.find_neighbours_in_direction(direction);
+
+                            for (int index = 0;
+                                 index < apr_iterator.number_neighbours_in_direction(direction); ++index) {
+                                // on each face, there can be 0-4 neighbours accessed by index
+                                if (neighbour_iterator.set_neighbour_iterator(apr_iterator, direction, index)) {
+                                    //will return true if there is a neighbour defined
+
+                                    //temp += apr.particles_intensities[neighbour_iterator];
+                                    counter+=neighbour_iterator;
+
+                                }
+                            }
+                        }
+
+                        neigh_avg[apr_iterator] = temp / counter;
+
+
+                    }
+                }
+            }
+        }
+    }
+
+    timer.stop_timer();
+
+
 
 
     ///////////////////////
@@ -151,48 +259,48 @@ int main(int argc, char **argv) {
     ///
     ////////////////////////
 
-    std::cout << "Search for a Particle Cell that may not exist at (x,y,z,l) = (10,10,10,4)" << std::endl;
-    std::cout << "--------------------" << std::endl;
-
-    ParticleCell random_particle_cell;
-    random_particle_cell.x = 1;
-    random_particle_cell.y = 2;
-    random_particle_cell.z = 5;
-    random_particle_cell.level = apr.level_max() - 1;
-
-    bool found = apr_iterator.set_iterator_by_particle_cell(random_particle_cell);
-
-    if(!found){
-        std::cout << "Particle Cell doesn't exist!" << std::endl;
-    } else {
-        std::cout << "Particle Cell exists with global index (particle number): " << random_particle_cell.global_index << " and has intensity value: " << apr.particles_intensities[apr_iterator] <<  std::endl;
-    }
-
-
-    ///////////////////////
-    ///
-    /// Set the iterator using random access by using a global co-ordinate (in original pixels), and setting the iterator, to the Particle Cell that contains the point in its spatial domain.
-    ///
-    ////////////////////////
-
-    srand (time(NULL));
-
-    float x = apr.orginal_dimensions(1)*((rand() % 10000)/10000.0f);
-    float y = apr.orginal_dimensions(0)*((rand() % 10000)/10000.0f);
-    float z = apr.orginal_dimensions(2)*((rand() % 10000)/10000.0f);
-
-    found = apr_iterator.set_iterator_by_global_coordinate(x,y,z);
-
-    std::cout << std::endl;
-    std::cout << "Searching for Particle Cell thats spatial domain contains (x,y,z)=(" << x << "," << y << "," << z << ") " << std::endl;
-    std::cout << "--------------------" << std::endl;
-
-    if(!found){
-        std::cout << "out of bounds" << std::endl;
-    } else {
-        std::cout << "Particle Cell found is at level: " << apr_iterator.level() << " with x: " << apr_iterator.x() << " y: " << apr_iterator.y() << " z: " << apr_iterator.z() << std::endl;
-        std::cout << " with global index: " << apr_iterator.global_index() << " and intensity " << apr.particles_intensities[apr_iterator] << std::endl;
-    }
+//    std::cout << "Search for a Particle Cell that may not exist at (x,y,z,l) = (10,10,10,4)" << std::endl;
+//    std::cout << "--------------------" << std::endl;
+//
+//    ParticleCell random_particle_cell;
+//    random_particle_cell.x = 1;
+//    random_particle_cell.y = 2;
+//    random_particle_cell.z = 5;
+//    random_particle_cell.level = apr.level_max() - 1;
+//
+//    bool found = apr_iterator.set_iterator_by_particle_cell(random_particle_cell);
+//
+//    if(!found){
+//        std::cout << "Particle Cell doesn't exist!" << std::endl;
+//    } else {
+//        std::cout << "Particle Cell exists with global index (particle number): " << random_particle_cell.global_index << " and has intensity value: " << apr.particles_intensities[apr_iterator] <<  std::endl;
+//    }
+//
+//
+//    ///////////////////////
+//    ///
+//    /// Set the iterator using random access by using a global co-ordinate (in original pixels), and setting the iterator, to the Particle Cell that contains the point in its spatial domain.
+//    ///
+//    ////////////////////////
+//
+//    srand (time(NULL));
+//
+//    float x = apr.orginal_dimensions(1)*((rand() % 10000)/10000.0f);
+//    float y = apr.orginal_dimensions(0)*((rand() % 10000)/10000.0f);
+//    float z = apr.orginal_dimensions(2)*((rand() % 10000)/10000.0f);
+//
+//    found = apr_iterator.set_iterator_by_global_coordinate(x,y,z);
+//
+//    std::cout << std::endl;
+//    std::cout << "Searching for Particle Cell thats spatial domain contains (x,y,z)=(" << x << "," << y << "," << z << ") " << std::endl;
+//    std::cout << "--------------------" << std::endl;
+//
+//    if(!found){
+//        std::cout << "out of bounds" << std::endl;
+//    } else {
+//        std::cout << "Particle Cell found is at level: " << apr_iterator.level() << " with x: " << apr_iterator.x() << " y: " << apr_iterator.y() << " z: " << apr_iterator.z() << std::endl;
+//        std::cout << " with global index: " << apr_iterator.global_index() << " and intensity " << apr.particles_intensities[apr_iterator] << std::endl;
+//    }
 
 
     ///

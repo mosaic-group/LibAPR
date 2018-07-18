@@ -8,6 +8,7 @@
 #include "algorithm/APRConverter.hpp"
 #include <utility>
 #include <cmath>
+#include "data_structures/APR/APRIterator_.hpp"
 
 struct TestData{
 
@@ -49,7 +50,7 @@ public:
     void SetUp() override;
 };
 
-bool check_neighbours(APR<uint16_t>& apr,APRIterator &current, APRIterator &neigh){
+bool check_neighbours(APR<uint16_t>& apr,GenIterator &current, GenIterator &neigh){
 
 
     bool success = true;
@@ -72,7 +73,7 @@ bool check_neighbours(APR<uint16_t>& apr,APRIterator &current, APRIterator &neig
 
     return success;
 }
-bool check_neighbour_out_of_bounds(APRIterator &current,uint8_t face){
+bool check_neighbour_out_of_bounds(GenIterator &current,uint8_t face){
 
 
     uint64_t num_neigh = current.number_neighbours_in_direction(face);
@@ -367,8 +368,12 @@ bool test_apr_neighbour_access(TestData& test_data){
 
     bool success = true;
 
-    APRIterator neighbour_iterator = test_data.apr.iterator();
-    APRIterator apr_iterator = test_data.apr.iterator();
+    //APRIterator neighbour_iterator = test_data.apr.iterator();
+    //APRIterator apr_iterator = test_data.apr.iterator();
+
+    APRIterator_ neighbour_iterator(test_data.apr.apr_access);
+    APRIterator_ apr_iterator(test_data.apr.apr_access);
+
 
     ExtraParticleData<uint16_t> x_p(test_data.apr.total_number_particles());
     ExtraParticleData<uint16_t> y_p(test_data.apr.total_number_particles());
@@ -395,7 +400,7 @@ bool test_apr_neighbour_access(TestData& test_data){
 
 
 
-
+    auto counter =0;
 
     for (unsigned int level = apr_iterator.level_min(); level <= apr_iterator.level_max(); ++level) {
         int z = 0;
@@ -430,6 +435,7 @@ bool test_apr_neighbour_access(TestData& test_data){
 
                                 if (check_intensity != apr_intensity) {
                                     success = false;
+                                    counter++;
                                 }
 
                                 uint16_t apr_level = neighbour_iterator.level();
@@ -577,7 +583,9 @@ bool test_apr_iterate(TestData& test_data){
 
     bool success = true;
 
-    auto apr_iterator = test_data.apr.iterator();
+    //auto apr_iterator = test_data.apr.iterator();
+
+    APRIterator_ apr_iterator(test_data.apr.apr_access);
 
     uint64_t particle_number = 0;
 

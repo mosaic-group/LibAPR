@@ -14,6 +14,13 @@ struct YGap_map {
     uint16_t global_index_begin_offset;
 };
 
+struct gap {
+    uint16_t y_e;
+    uint16_t y_b;
+    uint16_t g_i;
+};
+
+
 struct ParticleCellGapMap{
     std::map<uint16_t,YGap_map> map;
 };
@@ -25,7 +32,20 @@ struct MapIterator{
     uint16_t max_offset;
     uint64_t global_offset;
     uint64_t gap_index;
+
+    uint16_t y_gb;
+    uint16_t y_ge;
+
+    uint64_t index_b;
+    uint64_t index_e;
+
+    uint16_t y_cb;
+    uint16_t y_ce;
+    uint16_t index_c;
+
 };
+
+
 
 struct LocalMapIterators{
     std::vector<MapIterator>  same_level;
