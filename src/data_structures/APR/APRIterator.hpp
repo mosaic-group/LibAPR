@@ -346,8 +346,15 @@ inline bool APRIterator::set_iterator_by_particle_cell(ParticleCell& random_part
     //
     //  Have to have set the particle cells x,y,z,level, and it will move the iterator to this location if it exists
     //
-
-    random_particle_cell.pc_offset = this->apr_access->gap_map.x_num[random_particle_cell.level] * random_particle_cell.z + random_particle_cell.x;
+    if(random_particle_cell.level == level_max()) {
+        random_particle_cell.pc_offset =
+                this->apr_access->gap_map.x_num[random_particle_cell.level] * (random_particle_cell.z/2) +
+                        (random_particle_cell.x/2);
+    } else {
+        random_particle_cell.pc_offset =
+                this->apr_access->gap_map.x_num[random_particle_cell.level] * random_particle_cell.z +
+                random_particle_cell.x;
+    }
 
     if(this->apr_access->find_particle_cell(random_particle_cell,this->current_gap)){
         this->current_particle_cell = random_particle_cell;

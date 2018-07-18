@@ -39,9 +39,7 @@ struct MapIterator{
     uint64_t index_b;
     uint64_t index_e;
 
-    uint16_t y_cb;
-    uint16_t y_ce;
-    uint16_t index_c;
+    gap gc;
 
 };
 

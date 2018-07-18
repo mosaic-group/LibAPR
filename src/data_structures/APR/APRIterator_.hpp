@@ -91,7 +91,7 @@ inline uint64_t APRIterator_::set_new_lzx(const uint16_t level,const uint16_t z,
 
         if(this->current_gap.gap_index != UINT64_MAX) {
 
-            this->current_particle_cell.y = this->apr_access->yg_begin[this->current_gap.gap_index];
+            this->current_particle_cell.y = this->apr_access->gaps[this->current_gap.gap_index].y_b;
 
             uint64_t begin = start_index(level,this->current_particle_cell.pc_offset);
 
@@ -102,7 +102,7 @@ inline uint64_t APRIterator_::set_new_lzx(const uint16_t level,const uint16_t z,
 
             uint64_t gap_end = this->apr_access->gaps_index_by_level_and_zx_end[this->current_particle_cell.level][this->current_particle_cell.pc_offset]-1;
 
-            uint64_t num_parts = (uint64_t) (this->apr_access->global_index_begin_offset[gap_end] + (this->apr_access->yg_end[gap_end] - this->apr_access->yg_begin[gap_end]) + 1);
+            uint64_t num_parts = (uint64_t) (this->apr_access->gaps[gap_end].g_i + (this->apr_access->gaps[gap_end].y_e - this->apr_access->gaps[gap_end].y_b) + 1);
 
 
             this->end_index =  begin + num_parts;
@@ -126,7 +126,7 @@ inline uint64_t APRIterator_::set_new_lzx(const uint16_t level,const uint16_t z,
         if(this->current_gap.gap_index != UINT64_MAX) {
 
 
-            this->current_particle_cell.y = this->apr_access->yg_begin[this->current_gap.gap_index];
+            this->current_particle_cell.y = this->apr_access->gaps[this->current_gap.gap_index].y_b;
 
             uint64_t begin = start_index(level,this->current_particle_cell.pc_offset);
 
@@ -227,7 +227,7 @@ inline bool APRIterator_::set_iterator_to_particle_next_particle(){
 
         //I am in the next gap
         this->current_particle_cell.global_index++;
-        this->current_particle_cell.y = this->apr_access->yg_begin[this->current_gap.gap_index]; // the key is the first y value for the gap
+        this->current_particle_cell.y = this->apr_access->gaps[this->current_gap.gap_index].y_b; // the key is the first y value for the gap
         return true;
     }
 }
@@ -356,9 +356,17 @@ inline bool APRIterator_::set_iterator_by_particle_cell(ParticleCell& random_par
     //  Have to have set the particle cells x,y,z,level, and it will move the iterator to this location if it exists
     //
 
-    random_particle_cell.pc_offset = this->apr_access->gap_map.x_num[random_particle_cell.level] * random_particle_cell.z + random_particle_cell.x;
+    if(random_particle_cell.level == level_max()) {
+        random_particle_cell.pc_offset =
+                this->apr_access->gap_map.x_num[random_particle_cell.level] * (random_particle_cell.z/2) +
+                        (random_particle_cell.x/2);
+    } else {
+        random_particle_cell.pc_offset =
+                this->apr_access->gap_map.x_num[random_particle_cell.level] * random_particle_cell.z +
+                random_particle_cell.x;
+    }
 
-    if(this->apr_access->find_particle_cell(random_particle_cell,this->current_gap)){
+    if(this->apr_access->find_particle_cell_(random_particle_cell,this->current_gap)){
         this->current_particle_cell = random_particle_cell;
         this->set_neighbour_flag();
         //exists
