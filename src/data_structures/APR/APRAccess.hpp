@@ -318,28 +318,26 @@ public:
 
         //return true;
         //check if already pointing to correct location
-        if((y >= map_iterator.gc.y_b) && (y <= map_iterator.gc.y_e)) {
-            part_cell.global_index = (y - map_iterator.gc.y_b) + map_iterator.gc.g_i + offset;
+        if((y >= map_iterator.gc->y_b) && (y <= map_iterator.gc->y_e)) {
+            part_cell.global_index = (y - map_iterator.gc->y_b) + map_iterator.gc->g_i + offset;
             return true;
         }
 
-        uint64_t idx = map_iterator.gap_index;
+        //uint64_t idx = map_iterator.gap_index;
 
         //try next
-        if((idx+1)<map_iterator.index_e){
-            idx++;
-            if((y >= gaps[idx].y_b) && (y <= gaps[idx].y_e)) {
+        if((map_iterator.gc+1)!=map_iterator.gap_end){
+            map_iterator.gc++;
+            if((y >= map_iterator.gc->y_b) && (y <= map_iterator.gc->y_e)) {
 
-                part_cell.global_index = (y - gaps[idx].y_b) + gaps[idx].g_i + offset;
-                map_iterator.gc = gaps[idx];
-                map_iterator.gap_index = idx;
+                part_cell.global_index = (y - map_iterator.gc->y_b) + map_iterator.gc->g_i + offset;
 
                 return true;
             }
         }
 
-        //first is it in bounds
-        if ((y >= map_iterator.y_gb) && ((y <= map_iterator.y_ge))) {
+       // first is it in bounds
+  //      if ((y >= map_iterator.gap_begin->y_b) && ((y <= map_iterator.gap_end->y_e))) {
 
             //is iterator currently set to a valid gap
 //            if((idx >= map_iterator.index_b) && (idx < map_iterator.index_e)){
@@ -350,13 +348,13 @@ public:
 //                idx = map_iterator.index_b;
 //            }
 
-
-            if((map_iterator.y_ge-map_iterator.y_gb) > 0) {
-
-                idx = map_iterator.index_b + ((y - map_iterator.y_gb) * (map_iterator.index_e - map_iterator.index_b)) / (map_iterator.y_ge-map_iterator.y_gb);
-            } else {
-                idx = map_iterator.index_b;
-            }
+//
+//            if((map_iterator.y_ge-map_iterator.y_gb) > 0) {
+//
+//                idx = map_iterator.index_b + ((y - map_iterator.y_gb) * (map_iterator.index_e - map_iterator.index_b)) / (map_iterator.y_ge-map_iterator.y_gb);
+//            } else {
+//                idx = map_iterator.index_b;
+//            }
 
 //            if((y-map_iterator.y_gb) > (map_iterator.y_ge-y)) {
 //                idx = map_iterator.index_e;
@@ -366,48 +364,104 @@ public:
 
             //idx = map_iterator.index_b;
             //determine direction of iteration
-            auto gc = gaps.data.begin() + idx;
+            //auto gc = gaps.data.begin() + idx;
 
-            if(gc->y_b > y) {
-                //iterate down
+//        map_iterator.gc = map_iterator.gap_begin + (map_iterator.gap_index*(y - map_iterator.gap_begin->y_b))/100;
+//
+//        if(map_iterator.gc->y_b < y) {
+//
+//            //map_iterator.gc = map_iterator.gap_begin;
+//
+//            //const auto ie = map_iterator.index_e-1;
+//
+//
+//            while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+//                ++map_iterator.gc;
+//            }
+//
+//        } else {
+//           // map_iterator.gc = map_iterator.gap_end;
+//
+//            while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
+//                --map_iterator.gc;
+//            }
+//
+//        }
 
-                const auto ib = map_iterator.index_b;
+//
+//        map_iterator.gc = map_iterator.gap_begin;
+//
+//        //const auto ie = map_iterator.index_e-1;
+//
+//
+//        while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+//            ++map_iterator.gc;
+//        }
 
-                while ((idx > ib) && (gc->y_b > y)) {
-                    --idx;
-                    --gc;
-                }
-            } else {
-                //iterate up
+        if((y-map_iterator.gap_begin->y_b) <= (map_iterator.gap_end->y_e-y)) {
 
-                const auto ie = map_iterator.index_e-1;
+            map_iterator.gc = map_iterator.gap_begin;
 
-                while ((idx < (ie)) && (gc->y_b < y)) {
-                    ++idx;
-                    ++gc;
-                }
-            }
+            //const auto ie = map_iterator.index_e-1;
 
 
-           // return true;
-
-            if((y >=gc->y_b ) && (y <= gc->y_e)){
-
-                part_cell.global_index =  (y - gc->y_b) +  gc->g_i + offset;
-                map_iterator.gc = *gc;
-                map_iterator.gap_index = idx;
-
-                return true;
-
-            } else {
-                //return true;
-                return false;
+            while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+                ++map_iterator.gc;
             }
 
         } else {
-           // return true;
-            return false;
+            map_iterator.gc = map_iterator.gap_end;
+
+            while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
+                --map_iterator.gc;
+            }
+
         }
+
+//        map_iterator.gc = map_iterator.gap_begin;
+//
+//        //const auto ie = map_iterator.index_e-1;
+//
+//
+//        while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+//            ++map_iterator.gc;
+//        }
+
+//            if(gc->y_b > y) {
+//                //iterate down
+//
+//                const auto ib = map_iterator.index_b;
+//
+//                while ((idx > ib) && (gc->y_b > y)) {
+//                    --idx;
+//                    --gc;
+//                }
+//            } else {
+//                //iterate up
+//
+//                const auto ie = map_iterator.index_e-1;
+//
+//                while ((idx < (ie)) && (gc->y_b < y)) {
+//                    ++idx;
+//                    ++gc;
+//                }
+//            }
+
+
+           // return true;
+
+        if((y >= map_iterator.gc->y_b) && (y <= map_iterator.gc->y_e)) {
+            part_cell.global_index = (y - map_iterator.gc->y_b) + map_iterator.gc->g_i + offset;
+            return true;
+        } else {
+                //return true;
+                return false;
+        }
+
+//        } else {
+//           // return true;
+//            return false;
+//        }
 
     }
 
@@ -415,9 +469,9 @@ public:
     bool find_particle_cell_(ParticleCell& part_cell,MapIterator& map_iterator){
 
 
-        map_iterator.index_b =  gaps_index_by_level_and_zx_begin[part_cell.level][part_cell.pc_offset];
+        uint64_t begin =  gaps_index_by_level_and_zx_begin[part_cell.level][part_cell.pc_offset];
 
-        if(map_iterator.index_b!=UINT64_MAX) {
+        if(begin!=UINT64_MAX) {
             //ParticleCellGapMap& current_pc_map = gap_map.data[part_cell.level][part_cell.pc_offset][0];
 
             //this is required due to utilization of the equivalence optimization
@@ -427,10 +481,13 @@ public:
                 map_iterator.pc_offset = part_cell.pc_offset;
                 map_iterator.level = part_cell.level;
 
-                map_iterator.index_e =  gaps_index_by_level_and_zx_end[part_cell.level][part_cell.pc_offset];
+                map_iterator.gc = &gaps[begin];
+                map_iterator.gap_begin = &gaps[begin];
 
-                map_iterator.gc = gaps[map_iterator.index_b];
-                map_iterator.y_gb = map_iterator.gc.y_b;
+                uint64_t end =  gaps_index_by_level_and_zx_end[part_cell.level][part_cell.pc_offset];
+
+                map_iterator.gap_end = &gaps[end-1];
+
 
                 if(part_cell.pc_offset == 0){
                     if(part_cell.level == level_min()){
@@ -444,14 +501,20 @@ public:
 
                 if(part_cell.level == level_max()) {
 
-                    map_iterator.max_offset = (uint16_t) (gaps[ map_iterator.index_e-1].g_i + (gaps[ map_iterator.index_e-1].y_e - gaps[ map_iterator.index_e-1].y_b) + 1);
+                    map_iterator.max_offset = (uint16_t) (gaps[ end-1].g_i + (gaps[ end-1].y_e - gaps[ end-1].y_b) + 1);
 
                 } else {
                     map_iterator.max_offset = 0;
                 }
 
+//                if((end - begin)!=1) {
+//                    map_iterator.gap_index = 100*(end - begin) / (map_iterator.gap_end->y_e - map_iterator.gap_begin->y_b);
+//                } else {
+//                    map_iterator.gap_index = 0;
+//                }
 
-                map_iterator.y_ge = gaps[ map_iterator.index_e-1].y_e;
+
+               // map_iterator.y_ge = gaps[ map_iterator.index_e-1].y_e;
 
 
 

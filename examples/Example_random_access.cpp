@@ -82,7 +82,7 @@ int main(int argc, char **argv) {
 
     }
 
-    int rep = 1;
+    int rep = 10;
 
     timer.start_timer("APR serial iterator loop old");
 

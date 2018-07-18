@@ -33,13 +33,9 @@ struct MapIterator{
     uint64_t global_offset;
     uint64_t gap_index;
 
-    uint16_t y_gb;
-    uint16_t y_ge;
-
-    uint64_t index_b;
-    uint64_t index_e;
-
-    gap gc;
+    gap* gap_end;
+    gap* gap_begin;
+    gap* gc;
 
 };
 
