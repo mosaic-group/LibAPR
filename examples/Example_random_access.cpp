@@ -259,6 +259,8 @@ int main(int argc, char **argv) {
     std::cout << "Memory structure: " << (apr.apr_access.total_number_gaps*3*2)/(1000000.0f) << std::endl;
     std::cout << "Memory parts: " << (apr.apr_access.total_number_particles*2)/(1000000.0f) << std::endl;
 
+    std::cout << "PP: " << t2/(apr.total_number_particles()) << std::endl;
+
     ///////////////////////
     ///
     /// Set the iterator using random access by particle cell spatial index (x,y,z) and particle cell level
