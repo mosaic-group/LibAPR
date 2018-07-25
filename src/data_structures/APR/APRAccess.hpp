@@ -398,9 +398,30 @@ public:
 //            ++map_iterator.gc;
 //        }
 
-        if((y-map_iterator.gap_begin->y_b) <= (map_iterator.gap_end->y_e-y)) {
+//        if((y-map_iterator.gap_begin->y_b) <= (map_iterator.gap_end->y_e-y)) {
+//
+//            map_iterator.gc = map_iterator.gap_begin;
+//
+//            //const auto ie = map_iterator.index_e-1;
+//
+//
+//            while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+//                ++map_iterator.gc;
+//            }
+//
+//        } else {
+//            map_iterator.gc = map_iterator.gap_end;
+//
+//            while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
+//                --map_iterator.gc;
+//            }
+//
+//        }
 
-            map_iterator.gc = map_iterator.gap_begin;
+
+        if((y > map_iterator.gc->y_e)) {
+
+            //map_iterator.gc = map_iterator.gap_begin;
 
             //const auto ie = map_iterator.index_e-1;
 
@@ -410,13 +431,15 @@ public:
             }
 
         } else {
-            map_iterator.gc = map_iterator.gap_end;
+            //map_iterator.gc = map_iterator.gap_end;
 
             while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
                 --map_iterator.gc;
             }
 
         }
+
+
 
 //        map_iterator.gc = map_iterator.gap_begin;
 //
