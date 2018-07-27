@@ -397,47 +397,72 @@ public:
 //        while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
 //            ++map_iterator.gc;
 //        }
+        if((y <= map_iterator.gap_end->y_e) && ((y >=map_iterator.gap_begin->y_b))) {
 
-//        if((y-map_iterator.gap_begin->y_b) <= (map_iterator.gap_end->y_e-y)) {
+//            map_iterator.gc = map_iterator.gap_begin + ( (unsigned int) floor(map_iterator.num_gaps*(y - map_iterator.gap_begin->y_b)));
 //
-//            map_iterator.gc = map_iterator.gap_begin;
+//            if(map_iterator.gc->y_b < y) {
+//
+//                //map_iterator.gc = map_iterator.gap_begin;
+//
+//                //const auto ie = map_iterator.index_e-1;
+//
+//
+//                while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+//                    ++map_iterator.gc;
+//                }
+//
+//            } else {
+//               // map_iterator.gc = map_iterator.gap_end;
+//
+//                while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
+//                    --map_iterator.gc;
+//                }
+//
+//            }
+
+            if ((y - map_iterator.gap_begin->y_b) <= (map_iterator.gap_end->y_e - y)) {
+
+                map_iterator.gc = map_iterator.gap_begin;
+
+                //const auto ie = map_iterator.index_e-1;
+
+
+                while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+                    ++map_iterator.gc;
+                }
+
+            } else {
+                map_iterator.gc = map_iterator.gap_end;
+
+                while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
+                    --map_iterator.gc;
+                }
+
+            }
+
+//            if((y >= map_iterator.gc->y_e)) {
+//
+//            //map_iterator.gc = map_iterator.gap_begin;
 //
 //            //const auto ie = map_iterator.index_e-1;
 //
+//                while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
+//                    ++map_iterator.gc;
+//                }
 //
-//            while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
-//                ++map_iterator.gc;
+//            } else {
+//                //map_iterator.gc = map_iterator.gap_end;
+//
+//                while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
+//                    --map_iterator.gc;
+//                }
+//
 //            }
-//
-//        } else {
-//            map_iterator.gc = map_iterator.gap_end;
-//
-//            while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
-//                --map_iterator.gc;
-//            }
-//
-//        }
-
-
-        if((y > map_iterator.gc->y_e)) {
-
-            //map_iterator.gc = map_iterator.gap_begin;
-
-            //const auto ie = map_iterator.index_e-1;
-
-
-            while ((map_iterator.gc != map_iterator.gap_end) && (map_iterator.gc->y_b < y)) {
-                ++map_iterator.gc;
-            }
-
-        } else {
-            //map_iterator.gc = map_iterator.gap_end;
-
-            while ((map_iterator.gc != map_iterator.gap_begin) && (map_iterator.gc->y_b > y)) {
-                --map_iterator.gc;
-            }
-
         }
+
+
+
 
 
 
@@ -531,9 +556,9 @@ public:
                 }
 
 //                if((end - begin)!=1) {
-//                    map_iterator.gap_index = 100*(end - begin) / (map_iterator.gap_end->y_e - map_iterator.gap_begin->y_b);
+//                    map_iterator.num_gaps = (end - begin) / (1.0f*(map_iterator.gap_end->y_e - map_iterator.gap_begin->y_b));
 //                } else {
-//                    map_iterator.gap_index = 0;
+//                    map_iterator.num_gaps = 0;
 //                }
 
 
