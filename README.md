@@ -1,3 +1,5 @@
+Note: this repository is a mirror of [AdaptiveParticles/LibAPR](https://github.com/AdaptiveParticles/LibAPR). Please post issues and pull requests there.
+
 # LibAPR - The Adaptive Particle Representation Library
 
 Library for producing and processing on the Adaptive Particle Representation (APR) (For article see: https://www.nature.com/articles/s41467-018-07390-9).
